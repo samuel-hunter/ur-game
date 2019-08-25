@@ -6,4 +6,5 @@
   :license  "BSD 3-Clause"
   :version "0.0.1"
   :serial t
-  :components ((:file "ur-game")))
+  :components ((:file "engine")
+               (:file "ur-game")))
