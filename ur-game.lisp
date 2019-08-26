@@ -1,61 +1,55 @@
 (defpackage #:ur-game
-  (:use #:cl :ur-game.engine)
-  (:export :game-repl))
+  (:use :cl :ur-game.engine)
+  (:export :start))
 
 (in-package #:ur-game)
 
-(defmacro whenlet ((varname cond) &body forms)
-  `(let ((,varname ,cond))
-     (when ,varname ,@forms)))
+(defparameter +http-port+ 8080)
+(defparameter +wss-port+ 8081)
+(defvar *acceptor* nil)
 
-(defun tile-to-char (owner)
-  (ecase owner
-    (:none #\.)
-    (:white #\W)
-    (:black #\B)))
+(defparameter +app-root+ (asdf:system-source-directory :ur-game))
+(defparameter +static-root+ (merge-pathnames #P "static/" +app-root+))
+(defparameter +index-root+ (merge-pathnames #P "index.html" +static-root+))
 
-(defun write-path (path &key (newline t))
-  (loop :for tile :across path
-     :do (write-char (tile-to-char tile)))
-  (when newline
-    (write-char #\Newline))
-  nil)
+;; NOTE: The default generator from `session-token' grabs randomness
+;; form /dev/urandom or /dev/arandom, and therefore doesn't work on
+;; Windows.
+(defvar *game-token-generator*
+  (session-token:make-generator :token-length 10))
 
-(defun write-game (game)
-  (with-slots (white-start black-start white-end black-end shared-path turn last-roll rolledp
-                           white-spare-pieces black-spare-pieces) game
-    (fresh-line)
-    (write-path (reverse white-start) :newline nil)
-    (princ "  ")
-    (write-path (reverse white-end))
-    (write-path shared-path)
-    (write-path (reverse black-start) :newline nil)
-    (princ "  ")
-    (write-path (reverse black-end))
-    (format t "White: ~A  Black: ~A~%" white-spare-pieces black-spare-pieces)
-    (format t "Turn: ~A~%" (string turn))
-    (when rolledp
-      (format t "Roll: ~A~%" last-roll))))
+(defvar *player-token-generator*
+  (session-token:make-generator))
 
-(defun game-read ()
-  (string-downcase (read-line)))
+(defclass player-session ()
+  ((token :initform (funcall *player-token-generator*) :reader token)
+   (last-activity :initform (get-universal-time) :reader last-activity)))
 
-(defun game-eval (line game)
-  (cond
-    ((string-equal line "roll") (cons :roll (multiple-value-list (roll game))))
-    ((string-equal line "quit") :quit)
-    (t (handler-case
-           (cons :turn (make-move game (parse-integer line)))
-         (parse-error () :bad-input)))))
+(defclass game-session ()
+  ((game :initform (make-instance 'game))
+   (token :initform (funcall *game-token-generator*) :reader token)
+   (black :initform (make-instance 'player-session))
+   (white :initform (make-instance 'player-session))))
 
-(defun game-repl ()
-  (let ((game (make-instance 'game)))
-    (write-game game)
-    (loop
-       :for result = (game-eval (game-read) game)
-       :until (or (eq result :quit) (winner game))
-       :do (progn (format t "~A~%" result)
-                  (when (not (slot-value game 'rolledp))
-                    (write-game game))))
-    (whenlet (winner (winner game))
-             (format t "The winner is ~A~%" winner))))
+(defun session-player (session player)
+  (with-slots (black white) session
+    (ecase player
+      (:black black)
+      (:white white))))
+
+(defun active-player-session (session)
+  "Return the session of the current turn's player."
+  (session-player session (turn (slot-value session 'game))))
+
+(defvar *games* (make-hash-table))
+
+(defun start ()
+  (when (and *acceptor* (hunchentoot:started-p *acceptor*))
+    (hunchentoot:stop *acceptor*))
+
+  (setf hunchentoot:*dispatch-table* ())
+  (push (hunchentoot:create-folder-dispatcher-and-handler "/" +static-root+) hunchentoot:*dispatch-table*)
+  (push (hunchentoot:create-static-file-dispatcher-and-handler "/" +index-root+) hunchentoot:*dispatch-table*)
+
+  (setf *acceptor* (make-instance 'hunchentoot:easy-acceptor :port +http-port+))
+  (hunchentoot:start *acceptor*))

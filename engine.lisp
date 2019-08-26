@@ -42,7 +42,7 @@
 
 ;; Rosette tiles protect pieces from battle and give the player a
 ;; second turn
-(defparameter +rosettes+ '(4 8 14))
+(defparameter +rosettes+ '(4 8 13))
 
 (defun rosettep (index)
   "Return whether the tile has a rosette"

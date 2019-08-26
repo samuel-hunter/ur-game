@@ -5,6 +5,9 @@
   :author "Samuel Hunter"
   :license  "BSD 3-Clause"
   :version "0.0.1"
-  :serial t
+  :depends-on (:alexandria
+               :hunchentoot
+               :session-token)
   :components ((:file "engine")
-               (:file "ur-game")))
+               (:file "repl" :depends-on ("engine"))
+               (:file "ur-game" :depends-on ("engine"))))
