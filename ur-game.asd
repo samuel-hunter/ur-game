@@ -6,7 +6,9 @@
   :license  "BSD 3-Clause"
   :version "0.0.1"
   :depends-on (:alexandria
+               :cl-json
                :hunchentoot
+               :hunchensocket
                :session-token)
   :components ((:file "engine")
                (:file "repl" :depends-on ("engine"))
