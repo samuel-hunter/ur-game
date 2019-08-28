@@ -1,11 +1,8 @@
 /* global WebSocket */
 
 let playerColor = 'white'
-let lastRoll = 1
-
-function updateRoll() {
-  lastRoll = parseInt(document.getElementById('roll').value)
-}
+let lastRoll = 0
+let webSocket
 
 function toPlayer (color) {
   if (playerColor == 'white' ^ color == 'white') {
@@ -98,13 +95,14 @@ function logActivity(player, message) {
   let history = document.getElementById('history-box')
   let comment = document.createElement('p')
   let source = document.createElement('strong')
+
+  if (player === 'game') player += ':'
   player = player.charAt(0).toUpperCase() + player.slice(1)
 
   // Set as recent for a second
   comment.classList.add('recent')
   window.setTimeout(() => comment.classList.remove('recent'), 1000)
 
-  if (player === 'game') player += ':'
   source.insertAdjacentText('beforeend', player)
   comment.appendChild(source)
   comment.insertAdjacentText('beforeend', ' ' + message + '.')
@@ -170,9 +168,14 @@ function roll () {
   logActivity('you', 'rolled a ' + lastRoll)
 }
 
+function sendMessage(data) {
+  console.log({message: 'sending', data: data})
+  webSocket.send(JSON.stringify(data))
+}
+
 function start () {
   let socketUrl = 'ws://' + document.domain + ':8081/new'
-  let webSocket = new WebSocket(socketUrl)
+  webSocket = new WebSocket(socketUrl)
 
   webSocket.onmessage = function (event) {
     let data = JSON.parse(event.data)
@@ -180,9 +183,7 @@ function start () {
   }
 
   webSocket.onopen = function (event) {
-    let data = {op: 'heartbeat'}
-    console.log({message: 'sending', data: data})
-    webSocket.send(JSON.stringify(data))
+    window.setInterval(() => sendMessage({op: 'heartbeat'}), 5000)
   }
 
   webSocket.onclose = function (event) {
@@ -214,9 +215,7 @@ function start () {
   logActivity('you', 'rolled a 4')
   logActivity('you', "moved your piece to a rosette. It's your turn again")
 
-  setDice([true, false, true, false])
-
-  updateRoll()
+  setDice([false, false, false, false])
 }
 
 if (document.readyState != 'loading') {
