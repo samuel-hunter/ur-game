@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en-us">
   <head>
-    <meta content-type="utf-8">
+    <meta charset="utf-8">
     <title>The Royal Game of Ur</title>
 
     <link rel="stylesheet" href="app.css">
@@ -9,33 +9,41 @@
   <body>
     <h1>The Royal Game of Ur</h1>
 
-    <div id="opponent-pool" class="pool">
-    </div>
-    <div id="ur-board">
-      <div id="opponent-4" class="tile opponent-tile rosette"></div>
-      <div id="opponent-3" class="tile opponent-tile"></div>
-      <div id="opponent-2" class="tile opponent-tile"></div>
-      <div id="opponent-1" class="tile opponent-tile"></div>
-      <div id="opponent-14" class="tile opponent-tile rosette"></div>
-      <div id="opponent-13" class="tile opponent-tile"></div>
+    <div id="game-container">
+      <div id="game-set">
+        <div id="opponent-pool" class="pool">
+        </div>
+        <div id="ur-board">
+          <div id="opponent-4" class="tile opponent-tile rosette"></div>
+          <div id="opponent-3" class="tile opponent-tile"></div>
+          <div id="opponent-2" class="tile opponent-tile"></div>
+          <div id="opponent-1" class="tile opponent-tile"></div>
+          <div id="opponent-14" class="tile opponent-tile rosette"></div>
+          <div id="opponent-13" class="tile opponent-tile"></div>
 
-      <div id="shared-5" class="tile shared-tile"></div>
-      <div id="shared-6" class="tile shared-tile"></div>
-      <div id="shared-7 " class="tile shared-tile"></div>
-      <div id="shared-8" class="tile shared-tile rosette"></div>
-      <div id="shared-9" class="tile shared-tile"></div>
-      <div id="shared-10" class="tile shared-tile"></div>
-      <div id="shared-11" class="tile shared-tile"></div>
-      <div id="shared-12" class="tile shared-tile"></div>
+          <div id="shared-5" class="tile shared-tile"></div>
+          <div id="shared-6" class="tile shared-tile"></div>
+          <div id="shared-7" class="tile shared-tile"></div>
+          <div id="shared-8" class="tile shared-tile rosette"></div>
+          <div id="shared-9" class="tile shared-tile"></div>
+          <div id="shared-10" class="tile shared-tile"></div>
+          <div id="shared-11" class="tile shared-tile"></div>
+          <div id="shared-12" class="tile shared-tile"></div>
 
-      <div id="you-4" class="tile you-tile rosette"></div>
-      <div id="you-3" class="tile you-tile"></div>
-      <div id="you-2" class="tile you-tile"></div>
-      <div id="you-1" class="tile you-tile"></div>
-      <div id="you-14" class="tile you-tile rosette"></div>
-      <div id="you-13" class="tile you-tile"></div>
-    </div>
-    <div id="you-pool" class="pool">
+          <div id="you-4" class="tile you-tile rosette"></div>
+          <div id="you-3" class="tile you-tile"></div>
+          <div id="you-2" class="tile you-tile"></div>
+          <div id="you-1" class="tile you-tile"></div>
+          <div id="you-14" class="tile you-tile rosette"></div>
+          <div id="you-13" class="tile you-tile"></div>
+        </div>
+        <div id="you-pool" class="pool">
+        </div>
+      </div>
+      <div id="game-aside">
+        <div id="history-box">
+        </div>
+      </div>
     </div>
 
     <p>Suppose you can move <input id="roll" type="number" onchange="updateRoll()" min="1" max="4" value="1"> spaces.</p>

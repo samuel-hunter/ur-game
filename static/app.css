@@ -1,7 +1,22 @@
 body {
-    max-width: 80em;
+    max-width: 100em;
     margin: auto;
 }
+
+#game-container {
+    display: grid;
+    grid-template-columns: 8fr 4fr;
+}
+
+#game-set {
+    grid-column-start: 1;
+}
+
+#game-aside {
+    grid-column-start: 2;
+}
+
+/* Game set */
 
 #ur-board {
     display: grid;
@@ -49,17 +64,11 @@ body {
     background-repeat: no-repeat;
 }
 
-.tile .piece {
-    width: 80%;
-    height: 80%;
-    padding: 0;
-    margin: 0 0 -4px 0; /* This fixes weird margin but I don't know how */
-    padding: 10%;
-}
-
 .tile.selected {
     background-color: #A45A52;
 }
+
+/* pieces */
 
 .black {
     content: url(black-piece.png);
@@ -69,10 +78,22 @@ body {
     content: url(white-piece.png);
 }
 
+.tile .piece {
+    width: 80%;
+    height: 80%;
+    margin: 0 0 -4px 0; /* This fixes weird margin but I don't know how */
+    padding: 10%;
+}
+
+.pool {
+    height: 5em;
+    margin: 3px;
+}
+
 .pool .piece {
     width: 5em;
     height: 5em;
-    padding: 3px;
+    margin: 0 3px;
 }
 
 .piece[data-player=you]:not(.invalid-move) {
@@ -81,4 +102,23 @@ body {
 
 .piece[data-player=you].invalid-move {
     cursor: not-allowed;
+}
+
+/* history box */
+
+#history-box {
+    margin: 1em;
+    border: 1px solid darkgrey;
+    height: 25em;
+
+    overflow-y: scroll;
+}
+
+#history-box p {
+    margin: 0;
+    padding: 0.25em 5px;
+}
+
+#history-box p:nth-child(odd) {
+    background-color: #d9e7fd;
 }

@@ -94,6 +94,21 @@ function setSparePieces (color, amnt) {
   }
 }
 
+function logActivity(player, message) {
+  var history = document.getElementById('history-box')
+  var comment = document.createElement('p')
+  var source = document.createElement('strong')
+  player = player.charAt(0).toUpperCase() + player.slice(1)
+
+  source.insertAdjacentText('beforeend', player)
+  comment.appendChild(source)
+  comment.insertAdjacentText('beforeend', ' ' + message + '.')
+  history.appendChild(comment)
+
+  // Scroll down to see the latest comment
+  history.scrollTop = history.scrollHeight
+}
+
 function start () {
   var socketUrl = 'ws://' + document.domain + ':8081/new'
   var webSocket = new WebSocket(socketUrl)
@@ -115,6 +130,12 @@ function start () {
   setSparePieces('white', 5)
   setSparePieces('black', 6)
 
+  logActivity('you', 'rolled a 3')
+  logActivity('you', 'captured an enemy piece')
+  logActivity('oppoent', 'rolled a 4')
+  logActivity('opponent', 'landed on a rosette, netting another turn')
+  logActivity('you', 'rolled a 0, skipping your turn')
+  logActivity('opponent', 'rolled a 3, providing no valid moves and skipping their turn')
   updateRoll()
 }
 
