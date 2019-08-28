@@ -114,6 +114,8 @@ function start () {
   addPiece('black', 1)
   setSparePieces('white', 5)
   setSparePieces('black', 6)
+
+  updateRoll()
 }
 
 if (document.readyState != 'loading') {
