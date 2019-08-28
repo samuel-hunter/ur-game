@@ -53,10 +53,9 @@
 (defvar *games* (make-hash-table))
 
 (defun stop-session (session reason)
+  (setf (status session) :stopped)
   (loop :for client :in (hunchensocket:clients session)
-     :do (progn
-           (api-send client :disconnected :reason reason)
-           (hunchensocket:close-connection client)))
+     :do (hunchensocket:close-connection client :reason reason))
   (remhash (token session) *games*)
   (format t "Stopping game ~A: ~A~%" (token session) reason))
 
@@ -67,7 +66,8 @@
     (:waiting (api-send client :welcome))))
 
 (defmethod hunchensocket:client-disconnected ((session game-session) client)
-  (stop-session session "Client disconnected"))
+  (unless (eq (status session) :stopped)
+    (stop-session session "Client disconnected")))
 
 (defmethod hunchensocket:text-message-received ((session game-session) client message)
   (let ((message (json:decode-json-from-string message)))
@@ -100,8 +100,14 @@
     (hunchentoot:stop acceptor)))
 
 (defun stop ()
-  (stop-acceptor *http-acceptor*)
-  (stop-acceptor *ws-acceptor*))
+  (maphash (lambda (key game)
+             (declare (ignore key))
+             (stop-session game "Server closed"))
+           *games*)
+  (setf *games* (make-hash-table))
+
+  (values (stop-acceptor *http-acceptor*)
+          (stop-acceptor *ws-acceptor*)))
 
 (defun start ()
   (stop)

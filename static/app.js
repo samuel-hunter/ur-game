@@ -1,7 +1,7 @@
 /* global WebSocket */
 
-var playerColor = 'white'
-var lastRoll = 1
+let playerColor = 'white'
+let lastRoll = 1
 
 function updateRoll() {
   lastRoll = parseInt(document.getElementById('roll').value)
@@ -64,7 +64,7 @@ function unhighlightSelected () {
 
 
 function createPiece (color, position) {
-  var piece = document.createElement('span')
+  let piece = document.createElement('span')
   let player = toPlayer(color)
 
   if (player === 'you') {
@@ -79,27 +79,32 @@ function createPiece (color, position) {
 }
 
 function addPiece (color, position) {
-  var tile = getTile(color, position)
-  var piece = createPiece(color, position)
+  let tile = getTile(color, position)
+  let piece = createPiece(color, position)
   tile.appendChild(piece)
 }
 
 function setSparePieces (color, amnt) {
   let player = toPlayer(color)
-  var piecePool = document.getElementById(player + '-pool')
+  let piecePool = document.getElementById(player + '-pool')
   piecePool.innerHTML = ''
   for (var i = 0; i < amnt; i++) {
-    var piece = createPiece(color, 0)
+    let piece = createPiece(color, 0)
     piecePool.appendChild(piece)
   }
 }
 
 function logActivity(player, message) {
-  var history = document.getElementById('history-box')
-  var comment = document.createElement('p')
-  var source = document.createElement('strong')
+  let history = document.getElementById('history-box')
+  let comment = document.createElement('p')
+  let source = document.createElement('strong')
   player = player.charAt(0).toUpperCase() + player.slice(1)
 
+  // Set as recent for a second
+  comment.classList.add('recent')
+  window.setTimeout(() => comment.classList.remove('recent'), 1000)
+
+  if (player === 'game') player += ':'
   source.insertAdjacentText('beforeend', player)
   comment.appendChild(source)
   comment.insertAdjacentText('beforeend', ' ' + message + '.')
@@ -109,19 +114,88 @@ function logActivity(player, message) {
   history.scrollTop = history.scrollHeight
 }
 
+// Clear and repopulate the dice pool with a list of dice results
+function setDice(points) {
+  let dicePool = document.getElementById('dice-pool')
+  dicePool.innerHTML = ''
+
+  let dieTemplate = document.getElementById('die-template')
+
+  for (let i = 0; i < 4; i++) {
+    let die = dieTemplate.cloneNode(true)
+    die.classList.add('die')
+    die.classList.remove('hidden')
+    die.id = null
+
+    let pips = die.getElementsByClassName('pip')
+
+    var sidePips
+    if (points[i]) {
+      sidePips = 1
+    } else {
+      die.getElementsByClassName('center-pip')[0].classList.add('hidden')
+      sidePips = 2
+    }
+
+    // Hide side pips until there's two total pips left
+    for (let pip = 0; pip < 3; pip++) {
+      if (Math.random() > sidePips / (3 - pip)) {
+        pips[pip].classList.add('hidden')
+      } else {
+        sidePips--
+      }
+    }
+
+    dicePool.appendChild(die)
+  }
+}
+
+// Roll the dice. Called by #roll-button
+function roll () {
+  let dice = []
+  let result = 0
+
+  for (let i = 0; i < 4; i++) {
+    if (Math.random() > 0.5) {
+      dice.push(true)
+      result++
+    } else {
+      dice.push(false)
+    }
+  }
+
+  setDice(dice)
+  lastRoll = result
+
+  logActivity('you', 'rolled a ' + lastRoll)
+}
+
 function start () {
-  var socketUrl = 'ws://' + document.domain + ':8081/new'
-  var webSocket = new WebSocket(socketUrl)
+  let socketUrl = 'ws://' + document.domain + ':8081/new'
+  let webSocket = new WebSocket(socketUrl)
 
   webSocket.onmessage = function (event) {
-    var data = JSON.parse(event.data)
+    let data = JSON.parse(event.data)
     console.log({message: 'received', data: data})
   }
 
   webSocket.onopen = function (event) {
-    var data = {op: 'heartbeat'}
+    let data = {op: 'heartbeat'}
     console.log({message: 'sending', data: data})
     webSocket.send(JSON.stringify(data))
+  }
+
+  webSocket.onclose = function (event) {
+    if (event.wasClean) {
+      logActivity('game', `connection closed cleanly; code=${event.code}, reason=${event.reason}`)
+    } else {
+      logActivity('game', 'connection died')
+    }
+  }
+
+  webSocket.onerror = function (error) {
+    logActivity('game', 'Socket error: ' + error.message)
+    console.error(error)
   }
 
   addPiece('white', 2)
@@ -130,12 +204,18 @@ function start () {
   setSparePieces('white', 5)
   setSparePieces('black', 6)
 
-  logActivity('you', 'rolled a 3')
-  logActivity('you', 'captured an enemy piece')
-  logActivity('oppoent', 'rolled a 4')
-  logActivity('opponent', 'landed on a rosette, netting another turn')
-  logActivity('you', 'rolled a 0, skipping your turn')
-  logActivity('opponent', 'rolled a 3, providing no valid moves and skipping their turn')
+  logActivity('game', "It's your turn")
+  logActivity('you', 'rolled a 4')
+  logActivity('you', "moved your piece to a rosette. It's your turn again")
+  logActivity('you', 'rolled a 2')
+  logActivity('you', "moved your piece. It's black's turn")
+  logActivity('opponent', 'rolled a 1')
+  logActivity('opponent', "moved their piece. It's your turn")
+  logActivity('you', 'rolled a 4')
+  logActivity('you', "moved your piece to a rosette. It's your turn again")
+
+  setDice([true, false, true, false])
+
   updateRoll()
 }
 

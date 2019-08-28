@@ -1,6 +1,10 @@
-body {
+html {
     max-width: 100em;
     margin: auto;
+}
+
+h1 {
+    text-align: center;
 }
 
 #game-container {
@@ -121,4 +125,21 @@ body {
 
 #history-box p:nth-child(odd) {
     background-color: #d9e7fd;
+}
+
+#history-box p.recent:last-child {
+    background-color: #fdedb2;
+}
+
+/* dice */
+
+.die {
+    width: 7em;
+    margin: 5px;
+}
+
+/* misc */
+
+.hidden {
+    display: none;
 }
