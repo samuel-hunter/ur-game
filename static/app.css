@@ -4,20 +4,37 @@ body {
 }
 
 .ur-board {
-    padding: 0;
-}
-
-.ur-board tr {
-    margin: 0;
-    padding: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
+    grid-template-rows: 1fr 1fr 1fr;
 }
 
 .tile {
-    width: 5em;
-    height: 5em;
+    grid-column-start: auto;
+
     background-color: #fdedb2;
     margin: 0;
     border: 2px solid #473e37;
+}
+
+#opponent-14, #you-14 {
+    grid-column-start: 7;
+}
+
+#opponent-13, #you-13 {
+    grid-column-start: 8;
+}
+
+.opponent-tile {
+    grid-row-start: 1;
+}
+
+.shared-tile {
+    grid-row-start: 2;
+}
+
+.you-tile {
+    grid-row-start: 3;
 }
 
 .ur-board tr:nth-child(odd) td.tile:nth-child(odd),
@@ -33,11 +50,11 @@ body {
 }
 
 .tile .piece {
-    width: 90%;
-    height: 90%;
+    width: 80%;
+    height: 80%;
     padding: 0;
     margin: 0 0 -4px 0; /* This works but I don't know how */
-    padding: 5%;
+    padding: 10%;
 
     /* filter: drop-shadow(5px 5px 2px #5A4A3B); */
 }
@@ -55,8 +72,8 @@ body {
 }
 
 .pool .piece {
-    width: 50px;
-    height: 50px;
+    width: 5em;
+    height: 5em;
     padding: 3px;
 }
 
