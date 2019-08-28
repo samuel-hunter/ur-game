@@ -9,59 +9,44 @@
   <body>
     <h1>The Royal Game of Ur</h1>
 
-    <div class="pool opponent-pool">
-      <a class="black"></a>
-      <a class="black"></a>
-      <a class="black"></a>
-      <a class="black"></a>
-      <a class="black"></a>
-      <a class="black"></a>
+    <div id="opponent-pool" class="pool">
     </div>
     <table class="ur-board">
       <tr>
-        <td class="tile opponent-4 rosette"></td>
-        <td class="tile opponent-3"></td>
-        <td class="tile opponent-2"></td>
-        <td class="tile opponent-1">
-          <a class="black"></a>
-        </td>
+        <td id="opponent-4" class="tile rosette"></td>
+        <td id="opponent-3" class="tile"></td>
+        <td id="opponent-2" class="tile"></td>
+        <td id="opponent-1" class="tile"></td>
         <td></td>
         <td></td>
-        <td class="tile opponent-14 rosette"></td>
-        <td class="tile opponent-13"></td>
+        <td id="opponent-14" class="tile rosette"></td>
+        <td id="opponent-13" class="tile"></td>
       </tr>
       <tr>
-        <td class="tile shared-5"></td>
-        <td class="tile shared-6"></td>
-        <td class="tile shared-7"></td>
-        <td class="tile shared-8 rosette">
-          <a class="white" href></a>
-        </td>
-        <td class="tile shared-9"></td>
-        <td class="tile shared-10"></td>
-        <td class="tile shared-11"></td>
-        <td class="tile shared-12"></td>
+        <td id="shared-5" class="tile"></td>
+        <td id="shared-6" class="tile"></td>
+        <td id="shared-7 " class="tile"></td>
+        <td id="shared-8" class="tile rosette"></td>
+        <td id="shared-9" class="tile"></td>
+        <td id="shared-10" class="tile"></td>
+        <td id="shared-11" class="tile"></td>
+        <td id="shared-12" class="tile"></td>
       </tr>
       <tr>
-        <td class="tile you-4 rosette"></td>
-        <td class="tile you-3"></td>
-        <td class="tile you-2">
-          <a class="white" href></a>
-        </td>
-        <td class="tile you-1"></td>
+        <td id="you-4" class="tile rosette"></td>
+        <td id="you-3" class="tile"></td>
+        <td id="you-2" class="tile"></td>
+        <td id="you-1" class="tile"></td>
         <td></td>
         <td></td>
-        <td class="tile you-14 rosette"></td>
-        <td class="tile you-13"></td>
+        <td id="you-14" class="tile rosette"></td>
+        <td id="you-13" class="tile"></td>
       </tr>
     </table>
-    <div class="pool you-pool">
-      <a class="white" href></a>
-      <a class="white" href></a>
-      <a class="white" href></a>
-      <a class="white" href></a>
-      <a class="white" href></a>
+    <div id="you-pool" class="pool">
     </div>
+
+    <p>Suppose you can move <input id="roll" type="number" onchange="updateRoll()" min="1" max="4" value="1"> spaces.</p>
     <script src="app.js"></script>
   </body>
 </html>
