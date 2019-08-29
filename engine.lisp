@@ -143,9 +143,10 @@
 (defun valid-move (game index)
   "Return two values: Whether the move is valid, and the type of move."
   (with-slots (rolledp last-roll turn) game
+    (unless rolledp (return-from valid-move (Values nil :not-rolled-yet)))
+
     (let ((dest-index (+ index last-roll)))
       (cond
-        ((not rolledp) (values nil :not-rolled-yet))
         ((< index 0) (values nil :bad-tile))
         ((and (zerop index) (zerop (player-spare-pieces game))) (values nil :no-spare-pieces))
         ((> dest-index (1+ +path-length+)) (values nil :too-far))

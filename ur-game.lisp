@@ -71,7 +71,8 @@
 
 (defun game-to-alist (game)
   (with-slots (white-start black-start shared-path white-end black-end
-                           white-spare-pieces black-spare-pieces turn) game
+                           white-spare-pieces black-spare-pieces turn
+                           rolledp last-roll) game
     `((:white-start . ,white-start)
       (:black-start . ,black-start)
       (:shared-path . ,shared-path)
@@ -79,7 +80,8 @@
       (:black-end . ,black-end)
       (:white-spare-pieces . ,white-spare-pieces)
       (:black-spare-pieces . ,black-spare-pieces)
-      (:turn . ,turn))))
+      (:turn . ,turn)
+      (:last-roll . ,(and rolledp last-roll)))))
 
 (defun send-game-state (game-session)
   (broadcast-message game-session :game-state
@@ -145,10 +147,15 @@
                   (let ((position (cdr (assoc :position message))))
                     (if (integerp position)
                         (multiple-value-bind (move-type successful) (make-move game position)
-                          (broadcast-message session :move
+                          (if successful
+                              (progn
+                                (broadcast-message session :move
                                              :move-type move-type
-                                             :successful successful)
-                          (send-game-state session)
+                                             :successful t)
+                                (send-game-state session))
+                              (api-send client :move
+                                        :reason move-type
+                                        :successful (make-instance 'json-bool :p nil)))
                           (when-let (winner (winner game))
                             (stop-session session (string-capitalize winner)
                                           :status +ws-code-game-over+)))

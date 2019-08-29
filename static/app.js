@@ -69,6 +69,7 @@ function highlightDestination() {
 
   let position = parseInt(this.getAttribute('data-position'))
   let destination = position + lastRoll
+
   var tile = getTile(playerColor, destination)
 
   if (tile) {
@@ -131,8 +132,8 @@ function movePiece() {
   if (turn !== playerColor) return
 
   let position = parseInt(this.getAttribute('data-position'))
+  if (!isValidDestination(position + lastRoll)) return
 
-  lastRoll = null
   sendMessage({op: 'move', position: position})
   unhighlightSelected()
 }
@@ -148,11 +149,13 @@ function setTurn(color) {
   }
 
   // Enable the roll button whenever it's your turn
-  document.getElementById('roll-button').disabled = (turn !== playerColor)
+  document.getElementById('roll-button').disabled = lastRoll || (turn !== playerColor)
 }
 
 function updateGameState(game) {
   clearBoard()
+
+  lastRoll = game.lastRoll
 
   for (let i = 0; i < 4; i++) {
     if (game.blackStart[i] === 'black')
@@ -178,7 +181,7 @@ function updateGameState(game) {
   setSparePieces('white', game.whiteSparePieces)
   setSparePieces('black', game.blackSparePieces)
 
-  setTurn(game.turn)
+  setTurn(game.turn, game.lastRoll)
 }
 
 function logActivity(player, message) {
@@ -245,7 +248,10 @@ function roll() {
 }
 
 function sendMessage(data) {
-  console.log({message: 'sending', data: data})
+  // Heartbeat messages are annoying; don't print them out
+  if (data.op !== 'heartbeat') {
+    console.log({message: 'sending', data: data})
+  }
   webSocket.send(JSON.stringify(data))
 }
 
@@ -285,7 +291,11 @@ function connect(token) {
   webSocket = new WebSocket(socketUrl)
   webSocket.onmessage = function (event) {
     let data = JSON.parse(event.data)
-    console.log({message: 'received', data: data})
+
+    // ACK messages are annoying; don't print them out
+    if (data.op !== 'ack') {
+      console.log({message: 'received', data: data})
+    }
 
     switch (data.op) {
     case 'gameToken':
