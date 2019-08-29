@@ -30,6 +30,18 @@
 (defvar *game-token-generator*
   (session-token:make-generator :token-length 10))
 
+(defclass json-bool ()
+  ((p :initarg :p :initform nil)
+   (generalised :initarg :generalised :initform nil))
+  (:documentation "An object specifically made to be json-encoded to either true or false."))
+
+(defmethod encode-json ((object json-bool) &optional stream)
+  (with-slots (p generalised) object
+    (cond
+      ((and p generalised) (encode-json p stream))
+      (p (princ "true" stream))
+      (t (princ "false" stream)))))
+
 (defclass player-session (hunchensocket:websocket-client)
   ((color :accessor color)))
 
@@ -49,6 +61,11 @@
   (hunchensocket:send-text-message
    client (encode-json-plist-to-string (list* :op opcode data))))
 
+(defun broadcast-message (session opcode &rest data)
+  (loop :for client :in (hunchensocket:clients session)
+     :do (hunchensocket:send-text-message
+          client (encode-json-plist-to-string (list* :op opcode data)))))
+
 (defun game-to-alist (game)
   (with-slots (white-start black-start shared-path white-end black-end
                            white-spare-pieces black-spare-pieces turn) game
@@ -62,9 +79,8 @@
       (:turn . ,turn))))
 
 (defun send-game-state (game-session)
-  (let ((game-state (game-to-alist (game game-session))))
-    (loop :for client :in (hunchensocket:clients game-session)
-       :do (api-send client :game-state :game game-state))))
+  (broadcast-message game-session :game-state
+                     :game (game-to-alist (game game-session))))
 
 (defvar *games* (make-hash-table :test 'equal))
 
@@ -101,9 +117,41 @@
     (stop-session session "Client disconnected")))
 
 (defmethod hunchensocket:text-message-received ((session game-session) client message)
-  (let ((message (decode-json-from-string message)))
+  (let ((message (decode-json-from-string message))
+        (game (game session)))
     (eswitch ((cdr (assoc :op message)) :test #'string-equal)
-      ("heartbeat" (api-send client :ack)))))
+      ("heartbeat" (api-send client :ack))
+      ("roll" (if (eq (color client) (turn game))
+                  (progn
+                    (multiple-value-bind (total rolledp flips skip-turn) (roll game)
+                      (if rolledp
+                          (broadcast-message session :roll
+                                             :total total
+                                             :successful t
+                                             :flips flips
+                                             :skip-turn (make-instance 'json-bool
+                                                                       :p skip-turn
+                                                                       :generalised t))
+                          (api-send client :roll
+                                    :successful nil
+                                    :reason total))))
+                  (api-send client :roll
+                            :successful nil
+                            :reason :not-your-turn)))
+      ("move" (if (eq (color client) (turn game))
+                  (let ((position (cdr (assoc :position message))))
+                    (if (integerp position)
+                        (multiple-value-bind (move-type successful) (make-move game position)
+                          (broadcast-message session :move
+                                             :move-type move-type
+                                             :successful successful)
+                          (send-game-state session))
+                        (api-send client :move
+                                  :successful nil
+                                  :reason :invalid-position)))
+                  (api-send client :move
+                            :successful nil
+                            :reason :not-your-turn))))))
 
 (defun new-game-dispatcher (request)
   (when (string= (hunchentoot:script-name request) "/new")

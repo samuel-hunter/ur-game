@@ -189,7 +189,7 @@
 played in the original game. Store the sum in the game."
   (with-slots (random-state last-roll rolledp) game
     (when rolledp
-      (return-from roll :already-rolled))
+      (return-from roll (values :already-rolled nil)))
 
     (let* ((flips (loop :repeat 4
                      :collect (random 2 random-state)))
@@ -201,13 +201,13 @@ played in the original game. Store the sum in the game."
         ;; If the roll was 0, the current player has lost their turn.
         ((= total 0)
          (next-turn game)
-         (values total flips :flipped-nothing))
+         (values total t flips :flipped-nothing))
         ;; If the player has no valid moves, they skip their turn.
         ((not (valid-turn-p game))
          (next-turn game)
-         (values total flips :no-valid-moves))
+         (values total t flips :no-valid-moves))
         (t
-         (values total flips nil))))))
+         (values total t flips nil))))))
 
 (defun move-tile (game index)
   "Move a tile from INDEX to the last roll. Return the destination tile's index."
@@ -224,7 +224,6 @@ played in the original game. Store the sum in the game."
       dest-index)))
 
 
-;; TODO rewrite make-turn with valid-turn
 (defun make-move (game index)
   (with-slots (rolledp last-roll turn) game
     (multiple-value-bind (is-valid move-type) (valid-move game index)
@@ -233,4 +232,4 @@ played in the original game. Store the sum in the game."
           (if (rosettep dest-index)
               (setf rolledp nil)
               (next-turn game))))
-      (list is-valid move-type))))
+      (values move-type is-valid))))

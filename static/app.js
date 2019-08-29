@@ -126,31 +126,33 @@ function movePiece() {
   if (turn !== playerColor) return
 
   let position = parseInt(this.getAttribute('data-position'))
-  let destination = position + lastRoll
-  if (isValidDestination(destination)) {
-    if (position > 0) removePiece(this.parentNode)
-    if (destination < 15) addPiece(playerColor, destination)
-    if (position === 0) {
-      setSparePieces(playerColor, document.getElementById('you-pool').children.length - 1)
-    }
 
-    lastRoll = null
-    document.getElementById('roll-button').disabled = false
-    unhighlightSelected()
+  sendMessage({op: 'move', position: position})
+  unhighlightSelected()
+}
 
-    updateTooltip()
-    logActivity('you', 'moved a piece')
+function setTurn(color) {
+  turn = color
+  updateTooltip()
+
+  if (turn === playerColor) {
+    logActivity('game', "It is your turn")
+  } else {
+    logActivity('game', "It is your opponent's turn")
   }
+
+  // Enable the roll button whenever it's your turn
+  document.getElementById('roll-button').disabled = (turn !== playerColor)
 }
 
 function updateGameState(game) {
   clearBoard()
 
   for (let i = 0; i < 4; i++) {
-    if (game.blackStart === 'black')
+    if (game.blackStart[i] === 'black')
       addPiece('black', i+1)
 
-    if (game.whiteStart === 'white')
+    if (game.whiteStart[i] === 'white')
       addPiece('white', i+1)
   }
 
@@ -160,37 +162,17 @@ function updateGameState(game) {
   }
 
   for (let i = 0; i < 2; i++) {
-    if (game.blackEnd === 'black')
+    if (game.blackEnd[i] === 'black')
       addPiece('black', i+13)
 
-    if (game.whiteEnd === 'white')
+    if (game.whiteEnd[i] === 'white')
       addPiece('white', i+13)
   }
 
   setSparePieces('white', game.whiteSparePieces)
   setSparePieces('black', game.blackSparePieces)
 
-  turn = game.turn
-  updateTooltip()
-
-  if (turn === playerColor) {
-    logActivity('game', "It's your turn")
-  } else {
-    logActivity('game', "It's your opponent's turn")
-  }
-
-  // Enable the roll button whenever it's your turn
-  document.getElementById('roll-button').disabled = (turn !== playerColor)
-
-  // logActivity('game', "It's your turn")
-  // logActivity('you', 'rolled a 4')
-  // logActivity('you', "moved your piece to a rosette. It's your turn again")
-  // logActivity('you', 'rolled a 2')
-  // logActivity('you', "moved your piece. It's black's turn")
-  // logActivity('opponent', 'rolled a 1')
-  // logActivity('opponent', "moved their piece. It's your turn")
-  // logActivity('you', 'rolled a 4')
-  // logActivity('you', "moved your piece to a rosette. It's your turn again")
+  setTurn(game.turn)
 }
 
 function logActivity(player, message) {
@@ -230,7 +212,7 @@ function setDice(points) {
     let pips = die.getElementsByClassName('pip')
 
     var sidePips
-    if (points[i]) {
+    if (points[i] === 1) {
       sidePips = 1
     } else {
       die.getElementsByClassName('center-pip')[0].classList.add('hidden')
@@ -253,23 +235,7 @@ function setDice(points) {
 // Roll the dice. Called by #roll-button
 function roll() {
   document.getElementById('roll-button').disabled = true
-  let dice = []
-  let result = 0
-
-  for (let i = 0; i < 4; i++) {
-    if (Math.random() > 0.5) {
-      dice.push(true)
-      result++
-    } else {
-      dice.push(false)
-    }
-  }
-
-  setDice(dice)
-  lastRoll = result
-
-  updateTooltip()
-  logActivity('you', 'rolled a ' + lastRoll)
+  sendMessage({op: 'roll'})
 }
 
 function sendMessage(data) {
@@ -320,6 +286,60 @@ function connect(token) {
       updateGameState(data.game)
       break
     case 'ack':
+      break
+    case 'roll':
+      if (data.successful) {
+        if (turn === playerColor) {
+          lastRoll = data.total
+          setDice(data.flips)
+        }
+
+        let message = 'rolled a ' + data.total
+        switch (data.skipTurn) {
+        case 'flippedNothing':
+          message += ' and skipped a turn'
+          break
+        case 'noValidMove':
+          message += ', and with no valid moves, skipped a turn'
+          break
+        }
+        logActivity(toPlayer(turn), message)
+
+        if (data.skipTurn) {
+          if (turn === 'white') {
+            setTurn('black')
+          } else {
+            setTurn('white')
+          }
+        }
+      } else {
+        logActivity('game', "Can't roll: " + data.reason)
+      }
+      break
+    case 'move':
+      if (data.successful) {
+        let message = 'moved a piece'
+
+        switch (data.moveType) {
+        case 'movedPiece':
+          message = 'moved a piece'
+          break
+        case 'completedPiece':
+          message = "completed a piece's full trip"
+          break
+        case 'landedOnRosette':
+          message = 'landed on a rosette, netting an extra turn'
+          break
+        case 'capturedPiece':
+          message = 'captured an enemy piece'
+          break
+        }
+
+        logActivity(toPlayer(turn), message)
+      } else {
+        logActivity('game', "Can't move: " + data.reason)
+      }
+      lastRoll = null
       break
     default:
       logActivity('game', 'Unhandled op ' + data.op)
@@ -372,7 +392,7 @@ function start() {
     connect()
   }
 
-  setDice([false, false, false, false])
+  setDice([0, 0, 0, 0])
 }
 
 if (document.readyState != 'loading') {
