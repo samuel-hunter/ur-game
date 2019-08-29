@@ -273,7 +273,10 @@ function copyInvite() {
   document.execCommand('copy')
 }
 
-function disableGame() {
+function gameOver(reason) {
+  document.getElementById('post-game-options').classList.remove('hidden')
+  logActivity('game', 'Game over: ' + reason)
+
   document.getElementById('roll-button').disabled = true
   turn = null
   lastRoll = null
@@ -281,6 +284,8 @@ function disableGame() {
 }
 
 function connect(token) {
+  document.getElementById('post-game-options').classList.add('hidden')
+
   let socketUrl = 'ws://' + document.domain + ':8081'
   if (token) {
     socketUrl += '/join/' + token
@@ -304,6 +309,7 @@ function connect(token) {
     case 'welcome':
       hideInvite()
       playerColor = data.color
+      logActivity('game', 'Welcome. You are ' + playerColor)
       break
     case 'gameState':
       updateGameState(data.game)
@@ -322,7 +328,7 @@ function connect(token) {
         case 'flippedNothing':
           message += ' and skipped a turn'
           break
-        case 'noValidMove':
+        case 'noValidMoves':
           message += ', and with no valid moves, skipped a turn'
           break
         }
@@ -376,21 +382,20 @@ function connect(token) {
     if (event.wasClean) {
       switch (event.code) {
       case socketCodeOpponentDisconnected:
-        logActivity('game', 'Game over: opponent disconnected')
+        gameOver('Opponent disconnected')
         break
       case socketCodeGameOver:
-        logActivity('game', `Game over: ${event.reason} won`)
+        gameOver(event.reason + ' won')
         break
       default:
-        logActivity('game', `connection closed cleanly; code=${event.code}, reason="${event.reason}"`)
+        gameOver(`Connection closed cleanly; code=${event.code}, reason="${event.reason}"`)
         break
       }
     } else if (event.target === webSocket) {
       // Connection died on present websocket, and no new connection has been made.
+      gameOver('Connection died')
       logActivity('game', 'connection died')
     }
-
-    disableGame()
   }
 
   webSocket.onerror = function (error) {
@@ -405,11 +410,10 @@ function connect(token) {
       console.error(error)
       let message = error.message
       if (message) {
-        logActivity('game', 'Socket error: ' + error.message)
+        gameOver('Socket error: ' + error.message)
       } else {
-        logActivity('game', 'Socket error')
+        gameOver('Socket error')
       }
-      disableGame()
     }
 
   }
