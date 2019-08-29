@@ -5,13 +5,34 @@
     <title>The Royal Game of Ur</title>
 
     <link rel="stylesheet" href="app.css">
+
+    <noscript>
+      <style>
+        #game-container {
+          display: none;
+        }
+      </style>
+    </noscript>
   </head>
   <body>
     <h1>The Royal Game of Ur</h1>
 
+    <noscript id="noscript-modal">
+      <p>
+        Being an interactive game, this webpage requires Javascript to
+        function. Please enable Javascript and reload this page.
+      </p>
+    </noscript>
+    <div id="invite-modal" class="hidden">
+      <p>Send an invite link to a friend:</p>
+      <div id="invite-form">
+        <input type="text" id="invite-link" readonly onclick="copyInvite()"></input>
+        <button id="invite-button" onclick="copyInvite()">Copy</button>
+      </div>
+    </div>
     <div id="game-container">
-      <div id="game-set">
-        <p id="tooltip"></p>
+      <main id="game-set">
+        <p id="tooltip">Waiting for a friend to join</p>
         <div id="opponent-pool" class="pool">
         </div>
         <div id="ur-board">
@@ -36,19 +57,20 @@
           <div id="you-2" class="tile you-tile"></div>
           <div id="you-1" class="tile you-tile"></div>
 
-          <div id="you-15"></div> <!-- Winning tile -->
           <div id="you-14" class="tile you-tile rosette"></div>
           <div id="you-13" class="tile you-tile"></div>
+
+          <div id="you-15"></div> <!-- Winning tile -->
         </div>
         <div id="you-pool" class="pool">
         </div>
-      </div>
-      <div id="game-aside">
+      </main>
+      <aside id="game-aside">
         <div id="history-box">
         </div>
         <div id="dice-pool">
         </div>
-        <button id="roll-button" onclick="roll()">Roll</button>
+        <button id="roll-button" onclick="roll()" disabled>Roll</button>
 
         <svg id="die-template" class="hidden" viewBox="-2 -2 102 90">
           <g stroke="black" stroke-width="0.5">
@@ -68,7 +90,7 @@
 
           <polygon points="0,87 100,88 50,0" fill="none" stroke="black" stroke-width="2" />
         </svg>
-      </div>
+      </aside>
     </div>
 
     <script src="app.js"></script>

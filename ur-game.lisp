@@ -3,6 +3,11 @@
   (:import-from :alexandria
                 :when-let
                 :eswitch)
+  (:import-from :json
+                :encode-json
+                :encode-json-to-string
+                :encode-json-plist-to-string
+                :decode-json-from-string)
   (:export :start))
 
 (in-package #:ur-game)
@@ -29,28 +34,39 @@
   ((color :accessor color)))
 
 (defclass game-session (hunchensocket:websocket-resource)
-  ((game :initform (make-instance 'game))
+  ((game :initform (make-instance 'game) :reader game)
    (token :initarg :token :reader token)
    (white-token :initform (funcall *game-token-generator*))
    (black-token :initform (funcall *game-token-generator*))
    (status :initform :empty :accessor status))
   (:default-initargs :client-class 'player-session))
 
-(defun session-player (session player)
-  (with-slots (black white) session
-    (ecase player
-      (:black black)
-      (:white white))))
-
 (defun active-player-session (session)
   "Return the session of the current turn's player."
-  (session-player session (turn (slot-value session 'game))))
+  (session-player session (turn (game session))))
 
 (defun api-send (client opcode &rest data)
   (hunchensocket:send-text-message
-   client (json:encode-json-plist-to-string (list* :op opcode data))))
+   client (encode-json-plist-to-string (list* :op opcode data))))
 
-(defvar *games* (make-hash-table))
+(defun game-to-alist (game)
+  (with-slots (white-start black-start shared-path white-end black-end
+                           white-spare-pieces black-spare-pieces turn) game
+    `((:white-start . ,white-start)
+      (:black-start . ,black-start)
+      (:shared-path . ,shared-path)
+      (:white-end . ,white-end)
+      (:black-end . ,black-end)
+      (:white-spare-pieces . ,white-spare-pieces)
+      (:black-spare-pieces . ,black-spare-pieces)
+      (:turn . ,turn))))
+
+(defun send-game-state (game-session)
+  (let ((game-state (game-to-alist (game game-session))))
+    (loop :for client :in (hunchensocket:clients game-session)
+       :do (api-send client :game-state :game game-state))))
+
+(defvar *games* (make-hash-table :test 'equal))
 
 (defun stop-session (session reason)
   (setf (status session) :stopped)
@@ -59,18 +75,33 @@
   (remhash (token session) *games*)
   (format t "Stopping game ~A: ~A~%" (token session) reason))
 
+(defun start-online-session (session)
+  (setf (status session) :playing)
+  (let ((clients (hunchensocket:clients session))
+        (first-client-white-p (zerop (random 2))))
+    (if first-client-white-p
+        (progn
+          (setf (color (first clients)) :white)
+          (setf (color (second clients)) :black))
+        (progn
+          (setf (color (first clients)) :black)
+          (setf (color (second clients)) :white)))
+    (loop :for client :in clients
+       :do (api-send client :welcome :color (color client)))
+    (send-game-state session)))
+
 (defmethod hunchensocket:client-connected ((session game-session) client)
   (ecase (status session)
     (:empty (api-send client :game-token :token (token session))
             (setf (status session) :waiting))
-    (:waiting (api-send client :welcome))))
+    (:waiting (start-online-session session))))
 
 (defmethod hunchensocket:client-disconnected ((session game-session) client)
   (unless (eq (status session) :stopped)
     (stop-session session "Client disconnected")))
 
 (defmethod hunchensocket:text-message-received ((session game-session) client message)
-  (let ((message (json:decode-json-from-string message)))
+  (let ((message (decode-json-from-string message)))
     (eswitch ((cdr (assoc :op message)) :test #'string-equal)
       ("heartbeat" (api-send client :ack)))))
 
@@ -104,7 +135,7 @@
              (declare (ignore key))
              (stop-session game "Server closed"))
            *games*)
-  (setf *games* (make-hash-table))
+  (setf *games* (make-hash-table :test 'equal))
 
   (values (stop-acceptor *http-acceptor*)
           (stop-acceptor *ws-acceptor*)))

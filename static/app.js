@@ -35,7 +35,7 @@ function isValidDestination(position) {
 
 function updateTooltip(message) {
   if (message === undefined) {
-    if (turn === 'opponent') {
+    if (turn !== playerColor) {
       message = "It is your opponent's turn"
     } else if (lastRoll === null) {
       message = "It is your turn"
@@ -123,6 +123,7 @@ function setSparePieces(color, amnt) {
 
 function movePiece() {
   if (lastRoll === null) return
+  if (turn !== playerColor) return
 
   let position = parseInt(this.getAttribute('data-position'))
   let destination = position + lastRoll
@@ -140,6 +141,56 @@ function movePiece() {
     updateTooltip()
     logActivity('you', 'moved a piece')
   }
+}
+
+function updateGameState(game) {
+  clearBoard()
+
+  for (let i = 0; i < 4; i++) {
+    if (game.blackStart === 'black')
+      addPiece('black', i+1)
+
+    if (game.whiteStart === 'white')
+      addPiece('white', i+1)
+  }
+
+  for (let i = 0; i < 8; i++) {
+    if (game.sharedPath[i] !== 'none')
+      addPiece(game.sharedPath[i], i+5)
+  }
+
+  for (let i = 0; i < 2; i++) {
+    if (game.blackEnd === 'black')
+      addPiece('black', i+13)
+
+    if (game.whiteEnd === 'white')
+      addPiece('white', i+13)
+  }
+
+  setSparePieces('white', game.whiteSparePieces)
+  setSparePieces('black', game.blackSparePieces)
+
+  turn = game.turn
+  updateTooltip()
+
+  if (turn === playerColor) {
+    logActivity('game', "It's your turn")
+  } else {
+    logActivity('game', "It's your opponent's turn")
+  }
+
+  // Enable the roll button whenever it's your turn
+  document.getElementById('roll-button').disabled = (turn !== playerColor)
+
+  // logActivity('game', "It's your turn")
+  // logActivity('you', 'rolled a 4')
+  // logActivity('you', "moved your piece to a rosette. It's your turn again")
+  // logActivity('you', 'rolled a 2')
+  // logActivity('you', "moved your piece. It's black's turn")
+  // logActivity('opponent', 'rolled a 1')
+  // logActivity('opponent', "moved their piece. It's your turn")
+  // logActivity('you', 'rolled a 4')
+  // logActivity('you', "moved your piece to a rosette. It's your turn again")
 }
 
 function logActivity(player, message) {
@@ -226,13 +277,53 @@ function sendMessage(data) {
   webSocket.send(JSON.stringify(data))
 }
 
-function start() {
-  let socketUrl = 'ws://' + document.domain + ':8081/new'
-  webSocket = new WebSocket(socketUrl)
+function showInvite(token) {
+  let inviteLink = document.getElementById('invite-link')
+  inviteLink.value = window.location.host + '/#/' + token
 
+  document.getElementById('invite-modal').classList.remove('hidden')
+}
+
+function hideInvite() {
+  document.getElementById('invite-modal').classList.add('hidden')
+}
+
+// Called by #invite-button
+function copyInvite() {
+  let inviteLink = document.getElementById('invite-link')
+  inviteLink.select()
+  document.execCommand('copy')
+}
+
+function connect(token) {
+  let socketUrl = 'ws://' + document.domain + ':8081'
+  if (token) {
+    socketUrl += '/join/' + token
+  } else {
+    socketUrl += '/new'
+  }
+
+  webSocket = new WebSocket(socketUrl)
   webSocket.onmessage = function (event) {
     let data = JSON.parse(event.data)
     console.log({message: 'received', data: data})
+
+    switch (data.op) {
+    case 'gameToken':
+      showInvite(data.token)
+      break
+    case 'welcome':
+      hideInvite()
+      playerColor = data.color
+      break
+    case 'gameState':
+      updateGameState(data.game)
+      break
+    case 'ack':
+      break
+    default:
+      logActivity('game', 'Unhandled op ' + data.op)
+    }
   }
 
   webSocket.onopen = function (event) {
@@ -242,34 +333,45 @@ function start() {
   webSocket.onclose = function (event) {
     if (event.wasClean) {
       logActivity('game', `connection closed cleanly; code=${event.code}, reason=${event.reason}`)
-    } else {
+    } else if (event.target === webSocket) {
+      // Connection died on present websocket, and no new connection has been made.
       logActivity('game', 'connection died')
     }
   }
 
   webSocket.onerror = function (error) {
-    logActivity('game', 'Socket error: ' + error.message)
-    console.error(error)
+
+    if (token) {
+      // Try again, but this time creating a new game instead of
+      // joining a preexisting game.
+      console.warn('Retrying connection by making a new game')
+      logActivity('game', "Couldn't join game. Asking for a new game")
+      connect()
+    } else {
+      console.error(error)
+      let message = error.message
+      if (message) {
+        logActivity('game', 'Socket error: ' + error.message)
+      } else {
+        logActivity('game', 'Socket error')
+      }
+    }
+
+  }
+}
+
+function start() {
+  let socketUrl = 'ws://' + document.domain + ':8081'
+
+  let tokenRegex = /#\/(\w+)/
+
+  let match = tokenRegex.exec(window.location.hash)
+  if (match) {
+    connect(match[1])
+  } else {
+    connect()
   }
 
-  addPiece('white', 2)
-  addPiece('white', 8)
-  addPiece('black', 1)
-  addPiece('white', 13)
-  setSparePieces('white', 5)
-  setSparePieces('black', 6)
-
-  logActivity('game', "It's your turn")
-  logActivity('you', 'rolled a 4')
-  logActivity('you', "moved your piece to a rosette. It's your turn again")
-  logActivity('you', 'rolled a 2')
-  logActivity('you', "moved your piece. It's black's turn")
-  logActivity('opponent', 'rolled a 1')
-  logActivity('opponent', "moved their piece. It's your turn")
-  logActivity('you', 'rolled a 4')
-  logActivity('you', "moved your piece to a rosette. It's your turn again")
-
-  updateTooltip()
   setDice([false, false, false, false])
 }
 

@@ -7,6 +7,24 @@ h1 {
     text-align: center;
 }
 
+/* invite modal */
+
+#invite-modal {
+    border: 1px solid gray;
+    border-radius: 3px;
+    margin: 5px;
+    padding: 5px;
+}
+
+#invite-link {
+    padding: 5px;
+    color: black;
+    background-color: #f2f2f2;
+    border-radius: 5px;
+}
+
+/* main grid */
+
 #game-container {
     display: grid;
     grid-template-columns: 8fr 4fr;
@@ -72,8 +90,9 @@ h1 {
     grid-row-start: 3;
 }
 
-
-.tile:nth-child(even) {
+.opponent-tile:nth-child(even),
+.shared-tile:nth-child(odd),
+.you-tile:nth-child(even) {
     background-color: #f7ce7e;
 }
 
