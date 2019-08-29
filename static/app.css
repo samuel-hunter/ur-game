@@ -183,3 +183,14 @@ h1 {
 .hidden {
     display: none;
 }
+
+.mini-rosette {
+    width: 25px;
+}
+
+#fork-me {
+    z-index: 1000;
+    position: absolute;
+    top: 0;
+    right: 0;
+}

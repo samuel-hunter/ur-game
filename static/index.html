@@ -1,8 +1,15 @@
 <!DOCTYPE html>
-<html lang="en-us">
+<html lang="en">
   <head>
     <meta charset="utf-8">
     <title>The Royal Game of Ur</title>
+
+    <meta name="description" content="Ancient Sumerian 2-player Tables game of skill and luck">
+    <meta name="keywords" content="Tables, Ur, Game, Board Game">
+    <meta name="application-name" content="The Royal Game of Ur">
+    <meta name="author" content="Sam Hunter">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <link rel="stylesheet" href="app.css">
 
@@ -15,6 +22,13 @@
     </noscript>
   </head>
   <body>
+    <!-- Github ribbon -->
+    <a href="https://github.com/samuel-hunter/ur-game" id="fork-me">
+      <img width="149" height="149"
+           src="https://github.blog/wp-content/uploads/2008/12/forkme_right_gray_6d6d6d.png?resize=149%2C149"
+           class="attachment-full size-full" alt="Fork me on GitHub" data-recalc-dims="1">
+    </a>
+
     <h1>The Royal Game of Ur</h1>
 
     <noscript id="noscript-modal">
@@ -92,6 +106,35 @@
         </svg>
       </aside>
     </div>
+
+    <article id="rules">
+      <h2>Rules</h2>
+      <ul>
+        <li>
+          You win the game by getting all your seven pieces from one
+          end to the other.
+        </li>
+        <li>
+          You roll marked four dice, and the sum of all dice with
+          marks up is how much you can move a single piece on your turn.
+        </li>
+        <li>
+          If your piece lands on a rosette <img class="mini-rosette" src="rosette.png">,
+          you gain an extra turn.
+        </li>
+        <li>
+          You can jump over or capture enemy pieces, but you cannot
+          capture pieces that are your own, or are on a rosette.
+        </li>
+      </ul>
+    </article>
+
+    <br>
+
+    <iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/WZskjLq040I"
+            frameborder="0"
+            allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+            allowfullscreen></iframe>
 
     <script src="app.js"></script>
   </body>
