@@ -5,7 +5,7 @@ let turn = 'white'
 let lastRoll = null
 let webSocket
 
-function toPlayer (color) {
+function toPlayer(color) {
   if (playerColor == 'white' ^ color == 'white') {
     return 'opponent'
   } else {
@@ -13,21 +13,11 @@ function toPlayer (color) {
   }
 }
 
-function getTile (color, position) {
+function getTile(color, position) {
   if (position > 4 && position < 13) {
     return document.getElementById('shared-' + position)
   } else {
     return document.getElementById(toPlayer(color) + '-' + position)
-  }
-}
-
-function removePiece (tile) {
-  tile.innerHTML = ''
-}
-
-function clearBoard () {
-  for (let tile of document.getElementsByClassName('tile')) {
-    removePiece(tile)
   }
 }
 
@@ -43,7 +33,33 @@ function isValidDestination(position) {
   return true
 }
 
-function highlightDestination () {
+function updateTooltip(message) {
+  if (message === undefined) {
+    if (turn === 'opponent') {
+      message = "It is your opponent's turn"
+    } else if (lastRoll === null) {
+      message = "It is your turn"
+    } else {
+      message = `You rolled a ${lastRoll}`
+    }
+  }
+
+  let tooltip = document.getElementById('tooltip')
+  tooltip.innerHTML = ''
+  tooltip.insertAdjacentText('beforeend', message)
+}
+
+function removePiece(tile) {
+  tile.innerHTML = ''
+}
+
+function clearBoard() {
+  for (let tile of document.getElementsByClassName('tile')) {
+    removePiece(tile)
+  }
+}
+
+function highlightDestination() {
   if (lastRoll === null) return
 
   let position = parseInt(this.getAttribute('data-position'))
@@ -55,11 +71,14 @@ function highlightDestination () {
   }
 
   if (!isValidDestination(destination)) {
+    updateTooltip("You can't move there")
     this.classList.add('invalid-move')
   }
 }
 
-function unhighlightSelected () {
+function unhighlightSelected() {
+  updateTooltip()
+
   for (let elem of document.getElementsByClassName('selected')) {
     elem.classList.remove('selected')
   }
@@ -70,7 +89,7 @@ function unhighlightSelected () {
 }
 
 
-function createPiece (color, position) {
+function createPiece(color, position) {
   let piece = document.createElement('span')
   let player = toPlayer(color)
 
@@ -86,13 +105,13 @@ function createPiece (color, position) {
   return piece
 }
 
-function addPiece (color, position) {
+function addPiece(color, position) {
   let tile = getTile(color, position)
   let piece = createPiece(color, position)
   tile.appendChild(piece)
 }
 
-function setSparePieces (color, amnt) {
+function setSparePieces(color, amnt) {
   let player = toPlayer(color)
   let piecePool = document.getElementById(player + '-pool')
   piecePool.innerHTML = ''
@@ -102,7 +121,7 @@ function setSparePieces (color, amnt) {
   }
 }
 
-function movePiece () {
+function movePiece() {
   if (lastRoll === null) return
 
   let position = parseInt(this.getAttribute('data-position'))
@@ -114,11 +133,12 @@ function movePiece () {
       setSparePieces(playerColor, document.getElementById('you-pool').children.length - 1)
     }
 
-    logActivity('you', 'moved a piece')
-
     lastRoll = null
     document.getElementById('roll-button').disabled = false
     unhighlightSelected()
+
+    updateTooltip()
+    logActivity('you', 'moved a piece')
   }
 }
 
@@ -180,7 +200,7 @@ function setDice(points) {
 }
 
 // Roll the dice. Called by #roll-button
-function roll () {
+function roll() {
   document.getElementById('roll-button').disabled = true
   let dice = []
   let result = 0
@@ -197,6 +217,7 @@ function roll () {
   setDice(dice)
   lastRoll = result
 
+  updateTooltip()
   logActivity('you', 'rolled a ' + lastRoll)
 }
 
@@ -205,7 +226,7 @@ function sendMessage(data) {
   webSocket.send(JSON.stringify(data))
 }
 
-function start () {
+function start() {
   let socketUrl = 'ws://' + document.domain + ':8081/new'
   webSocket = new WebSocket(socketUrl)
 
@@ -248,6 +269,7 @@ function start () {
   logActivity('you', 'rolled a 4')
   logActivity('you', "moved your piece to a rosette. It's your turn again")
 
+  updateTooltip()
   setDice([false, false, false, false])
 }
 

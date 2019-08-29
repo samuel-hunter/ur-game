@@ -22,6 +22,12 @@ h1 {
 
 /* Game set */
 
+#tooltip {
+    color: grey;
+    font-style: italic;
+    text-align: center;
+}
+
 #ur-board {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
