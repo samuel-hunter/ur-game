@@ -1,7 +1,8 @@
 /* global WebSocket */
 
 let playerColor = 'white'
-let lastRoll = 0
+let turn = 'white'
+let lastRoll = null
 let webSocket
 
 function toPlayer (color) {
@@ -30,7 +31,10 @@ function clearBoard () {
   }
 }
 
-function isValidDestination(tile) {
+function isValidDestination(position) {
+  if (position < 1 || position > 15) return false
+  if (position === 15) return true
+  let tile = getTile(playerColor, position)
   if (tile.children.length === 0) return true
 
   let piece = tile.children[0]
@@ -40,17 +44,23 @@ function isValidDestination(tile) {
 }
 
 function highlightDestination () {
-  let position = parseInt(this.getAttribute('data-position'))
-  var tile = getTile(playerColor, position + lastRoll)
-  tile.classList.add('selected')
+  if (lastRoll === null) return
 
-  if (!isValidDestination(tile)) {
+  let position = parseInt(this.getAttribute('data-position'))
+  let destination = position + lastRoll
+  var tile = getTile(playerColor, destination)
+
+  if (tile) {
+    tile.classList.add('selected')
+  }
+
+  if (!isValidDestination(destination)) {
     this.classList.add('invalid-move')
   }
 }
 
 function unhighlightSelected () {
-  for (let elem of document.getElementsByClassName('tile')) {
+  for (let elem of document.getElementsByClassName('selected')) {
     elem.classList.remove('selected')
   }
 
@@ -67,6 +77,7 @@ function createPiece (color, position) {
   if (player === 'you') {
     piece.onmouseenter = highlightDestination
     piece.onmouseleave = unhighlightSelected
+    piece.onclick = movePiece
   }
 
   piece.setAttribute('data-position', position)
@@ -88,6 +99,26 @@ function setSparePieces (color, amnt) {
   for (var i = 0; i < amnt; i++) {
     let piece = createPiece(color, 0)
     piecePool.appendChild(piece)
+  }
+}
+
+function movePiece () {
+  if (lastRoll === null) return
+
+  let position = parseInt(this.getAttribute('data-position'))
+  let destination = position + lastRoll
+  if (isValidDestination(destination)) {
+    if (position > 0) removePiece(this.parentNode)
+    if (destination < 15) addPiece(playerColor, destination)
+    if (position === 0) {
+      setSparePieces(playerColor, document.getElementById('you-pool').children.length - 1)
+    }
+
+    logActivity('you', 'moved a piece')
+
+    lastRoll = null
+    document.getElementById('roll-button').disabled = false
+    unhighlightSelected()
   }
 }
 
@@ -150,6 +181,7 @@ function setDice(points) {
 
 // Roll the dice. Called by #roll-button
 function roll () {
+  document.getElementById('roll-button').disabled = true
   let dice = []
   let result = 0
 
@@ -202,6 +234,7 @@ function start () {
   addPiece('white', 2)
   addPiece('white', 8)
   addPiece('black', 1)
+  addPiece('white', 13)
   setSparePieces('white', 5)
   setSparePieces('black', 6)
 

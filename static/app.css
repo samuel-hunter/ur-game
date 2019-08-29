@@ -36,6 +36,16 @@ h1 {
     border: 2px solid #473e37;
 }
 
+#you-15 {
+    grid-column-start: 6;
+    grid-row-start: 3;
+}
+
+.tile:empty {
+    /* Keep the grid from flattening */
+    padding-bottom: calc(100% - 4px);
+}
+
 #opponent-14, #you-14 {
     grid-column-start: 7;
 }
@@ -70,6 +80,11 @@ h1 {
 
 .tile.selected {
     background-color: #A45A52;
+}
+
+#you-15.selected {
+    background-color: limegreen;
+    margin: 5px;
 }
 
 /* pieces */
