@@ -1,9 +1,12 @@
 /* global WebSocket */
 
 let playerColor = 'white'
-let turn = 'white'
+let turn = null
 let lastRoll = null
 let webSocket
+
+const socketCodeOpponentDisconnected = 4000
+const socketCodeGameOver = 4001
 
 function toPlayer(color) {
   if (playerColor == 'white' ^ color == 'white') {
@@ -35,7 +38,9 @@ function isValidDestination(position) {
 
 function updateTooltip(message) {
   if (message === undefined) {
-    if (turn !== playerColor) {
+    if (turn === null) {
+      message = 'Game over'
+    } else if (turn !== playerColor) {
       message = "It is your opponent's turn"
     } else if (lastRoll === null) {
       message = "It is your turn"
@@ -127,6 +132,7 @@ function movePiece() {
 
   let position = parseInt(this.getAttribute('data-position'))
 
+  lastRoll = null
   sendMessage({op: 'move', position: position})
   unhighlightSelected()
 }
@@ -261,6 +267,13 @@ function copyInvite() {
   document.execCommand('copy')
 }
 
+function disableGame() {
+  document.getElementById('roll-button').disabled = true
+  turn = null
+  lastRoll = null
+  updateTooltip()
+}
+
 function connect(token) {
   let socketUrl = 'ws://' + document.domain + ':8081'
   if (token) {
@@ -339,7 +352,6 @@ function connect(token) {
       } else {
         logActivity('game', "Can't move: " + data.reason)
       }
-      lastRoll = null
       break
     default:
       logActivity('game', 'Unhandled op ' + data.op)
@@ -347,16 +359,28 @@ function connect(token) {
   }
 
   webSocket.onopen = function (event) {
-    window.setInterval(() => sendMessage({op: 'heartbeat'}), 5000)
+    window.setInterval(() => sendMessage({op: 'heartbeat'}), 10000)
   }
 
   webSocket.onclose = function (event) {
     if (event.wasClean) {
-      logActivity('game', `connection closed cleanly; code=${event.code}, reason=${event.reason}`)
+      switch (event.code) {
+      case socketCodeOpponentDisconnected:
+        logActivity('game', 'Game over: opponent disconnected')
+        break
+      case socketCodeGameOver:
+        logActivity('game', `Game over: ${event.reason} won`)
+        break
+      default:
+        logActivity('game', `connection closed cleanly; code=${event.code}, reason="${event.reason}"`)
+        break
+      }
     } else if (event.target === webSocket) {
       // Connection died on present websocket, and no new connection has been made.
       logActivity('game', 'connection died')
     }
+
+    disableGame()
   }
 
   webSocket.onerror = function (error) {
@@ -375,6 +399,7 @@ function connect(token) {
       } else {
         logActivity('game', 'Socket error')
       }
+      disableGame()
     }
 
   }
@@ -382,7 +407,6 @@ function connect(token) {
 
 function start() {
   let socketUrl = 'ws://' + document.domain + ':8081'
-
   let tokenRegex = /#\/(\w+)/
 
   let match = tokenRegex.exec(window.location.hash)

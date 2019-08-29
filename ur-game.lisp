@@ -1,8 +1,8 @@
 (defpackage #:ur-game
   (:use :cl :ur-game.engine)
   (:import-from :alexandria
-                :when-let
-                :eswitch)
+                :eswitch
+                :when-let)
   (:import-from :json
                 :encode-json
                 :encode-json-to-string
@@ -23,6 +23,9 @@
 (defparameter +index-root+ (merge-pathnames #P "index.html" +static-root+))
 
 (defparameter +join-url-scanner+ (cl-ppcre:create-scanner "^/join/([\\w]+)$"))
+
+(defconstant +ws-code-opponent-disconnected+ 4000)
+(defconstant +ws-code-game-over+ 4001)
 
 ;; NOTE: The default generator from `session-token' grabs randomness
 ;; form /dev/urandom or /dev/arandom, and therefore doesn't work on
@@ -84,10 +87,10 @@
 
 (defvar *games* (make-hash-table :test 'equal))
 
-(defun stop-session (session reason)
+(defun stop-session (session reason &key (status 1000))
   (setf (status session) :stopped)
   (loop :for client :in (hunchensocket:clients session)
-     :do (hunchensocket:close-connection client :reason reason))
+     :do (hunchensocket:close-connection client :reason reason :status status))
   (remhash (token session) *games*)
   (format t "Stopping game ~A: ~A~%" (token session) reason))
 
@@ -114,7 +117,7 @@
 
 (defmethod hunchensocket:client-disconnected ((session game-session) client)
   (unless (eq (status session) :stopped)
-    (stop-session session "Client disconnected")))
+    (stop-session session "Opponent disconnected" :status +ws-code-opponent-disconnected+)))
 
 (defmethod hunchensocket:text-message-received ((session game-session) client message)
   (let ((message (decode-json-from-string message))
@@ -145,7 +148,10 @@
                           (broadcast-message session :move
                                              :move-type move-type
                                              :successful successful)
-                          (send-game-state session))
+                          (send-game-state session)
+                          (when-let (winner (winner game))
+                            (stop-session session (string-capitalize winner)
+                                          :status +ws-code-game-over+)))
                         (api-send client :move
                                   :successful nil
                                   :reason :invalid-position)))
@@ -166,9 +172,12 @@
     (when scanned
       (aref groups 0))))
 
+(defun find-session (token)
+  (gethash token *games*))
+
 (defun join-game-dispatcher (request)
   (when-let (token (token-from-url (hunchentoot:script-name request)))
-    (when-let (game-session (gethash token *games*))
+    (when-let (game-session (find-session token))
       (when (eq (status game-session) :waiting)
         game-session))))
 
@@ -181,7 +190,7 @@
 (defun stop ()
   (maphash (lambda (key game)
              (declare (ignore key))
-             (stop-session game "Server closed"))
+             (stop-session game "Server closed" :status 1012))
            *games*)
   (setf *games* (make-hash-table :test 'equal))
 
