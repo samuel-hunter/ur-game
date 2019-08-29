@@ -188,6 +188,12 @@
       (when (eq (status game-session) :waiting)
         game-session))))
 
+(defun invite-link-dispatcher (request)
+  (print (hunchentoot:script-name request))
+  (when-let (token (token-from-url (hunchentoot:script-name request)))
+    (print :found)
+    (hunchentoot:redirect (concatenate 'string "/#/" token))))
+
 (defun stop-acceptor (acceptor)
   "Stop the acceptor if feasible."
   (when (and acceptor
@@ -209,6 +215,7 @@
 
   (setf hunchentoot:*dispatch-table*
         (list (hunchentoot:create-static-file-dispatcher-and-handler "/" +index-root+)
+              'invite-link-dispatcher
               (hunchentoot:create-folder-dispatcher-and-handler "/" +static-root+)))
   (setf hunchensocket:*websocket-dispatch-table*
         (list 'new-game-dispatcher

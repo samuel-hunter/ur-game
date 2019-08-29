@@ -257,7 +257,7 @@ function sendMessage(data) {
 
 function showInvite(token) {
   let inviteLink = document.getElementById('invite-link')
-  inviteLink.value = window.location.host + '/#/' + token
+  inviteLink.value = window.location.host + '/join/' + token
 
   document.getElementById('invite-modal').classList.remove('hidden')
 }
