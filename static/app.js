@@ -184,25 +184,40 @@ function updateGameState(game) {
   setTurn(game.turn, game.lastRoll)
 }
 
-function logActivity(player, message) {
-  let history = document.getElementById('history-box')
-  let comment = document.createElement('p')
-  let source = document.createElement('strong')
+function addMessage(source, message) {
+  let messages = document.getElementById('messages')
+  let messageElem = document.createElement('p')
+  let sourceElem = document.createElement('strong')
 
-  if (player === 'game') player += ':'
-  player = player.charAt(0).toUpperCase() + player.slice(1)
+  sourceElem.insertAdjacentText('beforeend', source)
+  messageElem.appendChild(sourceElem)
+  messageElem.insertAdjacentText('beforeend', ' ' + message)
 
-  // Set as recent for a second
-  comment.classList.add('recent')
-  window.setTimeout(() => comment.classList.remove('recent'), 1000)
+  messageElem.classList.add('recent')
+  window.setTimeout(() => messageElem.classList.remove('recent'), 1000)
 
-  source.insertAdjacentText('beforeend', player)
-  comment.appendChild(source)
-  comment.insertAdjacentText('beforeend', ' ' + message + '.')
-  history.appendChild(comment)
+  messages.appendChild(messageElem)
 
   // Scroll down to see the latest comment
-  history.scrollTop = history.scrollHeight
+  messages.scrollTop = messages.scrollHeight
+}
+
+function logActivity(source, message) {
+  if (source === 'game') source += ':'
+  source = source.charAt(0).toUpperCase() + source.slice(1)
+
+  addMessage(source, message + '.')
+}
+
+function showComment(player, message) {
+  player = player.charAt(0).toUpperCase() + player.slice(1)
+  addMessage(player + ':', message)
+}
+
+function sendComment() {
+  let comment = document.getElementById('comment')
+  sendMessage({op: 'message', message: comment.value})
+  comment.value = ''
 }
 
 // Clear and repopulate the dice pool with a list of dice results
@@ -369,8 +384,15 @@ function connect(token) {
         logActivity('game', "Can't move: " + data.reason)
       }
       break
+    case 'message':
+      showComment(toPlayer(data.color), data.message)
+      break
+    case 'err':
+      logActivity('game', "Error: " + data.reason)
+      break
     default:
       logActivity('game', 'Unhandled op ' + data.op)
+      break
     }
   }
 
@@ -429,6 +451,13 @@ function start() {
   } else {
     connect()
   }
+
+
+  document.getElementById('comment').addEventListener('keyup', function (event) {
+  if (event.key === 'Enter') {
+    sendComment()
+  }
+  })
 
   setDice([0, 0, 0, 0])
 }

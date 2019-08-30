@@ -11,8 +11,8 @@ Ur](https://img.youtube.com/vi/WZskjLq040I/0.jpg)](https://youtu.be/WZskjLq040I
 
 # Rules
 
-* You win the game by getting all your seven pieces from one end to
-  the other.
+* You win the game by getting all your seven pieces from one end of
+  the board to the other.
 * You roll marked four dice, and the sum of all dice with marks up is
   how much you can move a single piece on your turn.
 * If your piece lands on a rosette, you gain an extra turn.

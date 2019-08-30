@@ -39,7 +39,7 @@
       </p>
     </noscript>
     <div id="invite-modal" class="hidden">
-      <p>Send an invite link to a friend:</p>
+      <p>Send this invite link to a friend:</p>
       <div id="invite-form">
         <input type="text" id="invite-link" readonly onclick="copyInvite()"></input>
         <button id="invite-button" onclick="copyInvite()">Copy</button>
@@ -84,7 +84,12 @@
         </div>
       </main>
       <aside id="game-aside">
-        <div id="history-box">
+        <div id="message-box">
+          <div id="messages"></div>
+          <div id="comment-box">
+            <input id="comment">
+            <button id="comment-button" onclick="sendComment()">Send</button>
+          </div>
         </div>
         <div id="dice-pool">
         </div>
@@ -116,7 +121,7 @@
       <ul>
         <li>
           You win the game by getting all your seven pieces from one
-          end to the other.
+          end of the board to the other.
         </li>
         <li>
           You roll marked four dice, and the sum of all dice with

@@ -148,27 +148,39 @@ h1 {
     cursor: not-allowed;
 }
 
-/* history box */
+/* message box */
 
-#history-box {
+#message-box {
+    padding: 0;
     margin: 1em;
-    border: 1px solid darkgrey;
-    height: 25em;
-
-    overflow-y: scroll;
 }
 
-#history-box p {
+#messages {
+    height: 25em;
+    overflow-y: scroll;
+    border: 1px solid darkgrey;
+}
+
+#messages p {
     margin: 0;
     padding: 0.25em 5px;
 }
 
-#history-box p:nth-child(odd) {
+#messages p:nth-child(odd) {
     background-color: #d9e7fd;
 }
 
-#history-box p.recent:last-child {
+#messages p.recent:last-child {
     background-color: #fdedb2;
+}
+
+#comment-box {
+    display: flex;
+    border: 1px solid darkgrey;
+}
+
+#comment {
+    flex: 1; /* Fill remaining space */
 }
 
 /* dice */
