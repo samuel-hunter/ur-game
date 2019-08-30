@@ -9,7 +9,9 @@
                :cl-json
                :hunchentoot
                :hunchensocket
+               :osicat
                :session-token)
   :components ((:file "engine")
+               (:file "config")
                (:file "repl" :depends-on ("engine"))
-               (:file "ur-game" :depends-on ("engine"))))
+               (:file "ur-game" :depends-on ("engine" "config"))))

@@ -1,5 +1,5 @@
 (defpackage #:ur-game
-  (:use :cl :ur-game.engine)
+  (:use :cl :ur-game.engine :ur-game.config)
   (:import-from :alexandria
                 :switch
                 :when-let)
@@ -8,12 +8,10 @@
                 :encode-json-to-string
                 :encode-json-plist-to-string
                 :decode-json-from-string)
-  (:export :start))
+  (:export :start
+           :stop))
 
 (in-package #:ur-game)
-
-(defparameter +http-port+ 8080)
-(defparameter +ws-port+ 8081)
 
 (defvar *http-acceptor* nil)
 (defvar *ws-acceptor* nil)
@@ -236,10 +234,10 @@
 
   (unless *http-acceptor*
     (setf *http-acceptor*
-          (make-instance 'hunchentoot:easy-acceptor :port +http-port+)))
+          (make-instance 'hunchentoot:easy-acceptor :port (config :http-port))))
   (unless *ws-acceptor*
     (setf *ws-acceptor*
-          (make-instance 'hunchensocket:websocket-acceptor :port +ws-port+)))
+          (make-instance 'hunchensocket:websocket-acceptor :port (config :ws-port))))
 
   (values (hunchentoot:start *http-acceptor*)
           (hunchentoot:start *ws-acceptor*)))
