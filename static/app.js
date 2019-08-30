@@ -311,7 +311,14 @@ function connect(token) {
 
   document.getElementById('post-game-options').classList.add('hidden')
 
-  let socketUrl = 'ws://' + document.domain + ':8081'
+  let socketUrl
+  if (window.location.protocol === 'https:') {
+    socketUrl = 'wss://'
+  } else {
+    socketUrl = 'ws://'
+  }
+
+  socketUrl += document.domain + ':8081'
   if (token) {
     socketUrl += '/join/' + token
   } else {
