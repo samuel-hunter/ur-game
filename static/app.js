@@ -215,9 +215,15 @@ function showComment(player, message) {
 }
 
 function sendComment() {
-  let comment = document.getElementById('comment')
-  sendMessage({op: 'message', message: comment.value})
-  comment.value = ''
+  let commentElem = document.getElementById('comment')
+  let comment = commentElem.value.trim()
+
+  // Comment only when meaningful text is included
+  if (comment !== '') {
+    sendMessage({op: 'message', message: comment})
+  }
+
+  commentElem.value = ''
 }
 
 // Clear and repopulate the dice pool with a list of dice results
@@ -299,6 +305,9 @@ function gameOver(reason) {
 }
 
 function connect(token) {
+  // Clear message box
+  document.getElementById('messages').innerHTML = ''
+
   document.getElementById('post-game-options').classList.add('hidden')
 
   let socketUrl = 'ws://' + document.domain + ':8081'
