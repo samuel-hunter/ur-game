@@ -221,7 +221,7 @@
   (values (stop-acceptor *http-acceptor*)
           (stop-acceptor *ws-acceptor*)))
 
-(defun start ()
+(defun start (&key (http-port (config :http-port)) (ws-port (config :ws-port)))
   (stop)
 
   (setf hunchentoot:*dispatch-table*
@@ -234,10 +234,10 @@
 
   (unless *http-acceptor*
     (setf *http-acceptor*
-          (make-instance 'hunchentoot:easy-acceptor :port (config :http-port))))
+          (make-instance 'hunchentoot:easy-acceptor :port http-port)))
   (unless *ws-acceptor*
     (setf *ws-acceptor*
-          (make-instance 'hunchensocket:websocket-acceptor :port (config :ws-port))))
+          (make-instance 'hunchensocket:websocket-acceptor :port ws-port)))
 
   (values (hunchentoot:start *http-acceptor*)
           (hunchentoot:start *ws-acceptor*)))
