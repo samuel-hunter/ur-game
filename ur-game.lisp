@@ -115,67 +115,60 @@
             (setf (status session) :waiting))
     (:waiting (start-online-session session))))
 
+(defun message-op (message)
+  "Return the operand of the message"
+  (cdr (assoc :op message)))
+
 (defmethod hunchensocket:client-disconnected ((session game-session) client)
   (unless (eq (status session) :stopped)
-    (stop-session session "Opponent disconnected" :status +ws-code-opponent-disconnected+)))
+    (stop-session session "Opponent disconnected" :status +ws-code-opponent-disconnected+)))q
 
 (defmethod hunchensocket:text-message-received ((session game-session) client message)
-  (let ((message (decode-json-from-string message))
-        (game (game session))
-        (playingp (eq (status session) :playing)))
-    (switch ((cdr (assoc :op message)) :test #'string-equal)
-      ("heartbeat" (api-send client :ack))
-      ("roll"
-       (cond
-         ((not playingp) (api-send client :err :reason :not-playing-yet))
-         ((eq (color client) (turn game))
-          (multiple-value-bind (total rolledp flips skip-turn) (roll game)
-            (if rolledp
-                (broadcast-message session :roll
-                                   :total total
-                                   :successful t
-                                   :flips flips
-                                   :skip-turn (make-instance 'json-bool
-                                                             :p skip-turn
-                                                             :generalised t))
-                (api-send client :roll
-                          :successful nil
-                          :reason total))))
-         (t (api-send client :roll
-                  :successful nil
-                  :reason :not-your-turn))))
-      ("move"
-       (cond
-         ((not playingp) (api-send client :err :reason :not-playing-yet))
-         ((eq (color client) (turn game))
-          (let ((position (cdr (assoc :position message))))
-            (if (integerp position)
-                (multiple-value-bind (move-type successful) (make-move game position)
-                  (if successful
-                      (progn
-                        (broadcast-message session :move
-                                           :move-type move-type
-                                           :successful t)
-                        (send-game-state session))
-                      (api-send client :move
-                                :reason move-type
-                                :successful (make-instance 'json-bool :p nil)))
-                  (when-let (winner (winner game))
-                    (stop-session session (string-capitalize winner)
-                                  :status +ws-code-game-over+)))
-                (api-send client :move
-                          :successful nil
-                          :reason :invalid-position))))
-         (t (api-send client :move
-                     :successful nil
-                     :reason :not-your-turn))))
-      ("message"
-       (if playingp
-           (let ((message (cdr (assoc :message message))))
-             (broadcast-message session :message
-                                :message message
-                                :color (color client)))
-           (api-send client :err :reason :not-playing-yet))))))
+  (let* ((message (decode-json-from-string message))
+         (game (game session))
+         (playingp (eq (status session) :playing))
+         (operand (message-op message)))
+    (cond
+      ((string-equal operand "heartbeat") (api-send client :ack))
+      ((not playingp) (api-send client :err :reason :not-playing-yet))
+      ((string-equal operand "message")
+       (let ((message (cdr (assoc :message message))))
+         (broadcast-message session :message
+                            :message message
+                            :color (color client))))
+      ((not (eq (color client) (turn game)))
+       (api-send client :err :reason :not-your-turn))
+      (t (switch (operand :test 'string-equal)
+           ("roll" (multiple-value-bind (total rolledp flips skip-turn) (roll game)
+                     (if rolledp
+                         (broadcast-message session :roll
+                                            :total total
+                                            :successful t
+                                            :flips flips
+                                            :skip-turn (make-instance 'json-bool
+                                                                      :p skip-turn
+                                                                      :generalised t))
+                         (api-send client :roll
+                                   :successful nil
+                                   :reason total))))
+           ("move" (let ((position (cdr (assoc :position message))))
+                     (if (integerp position)
+                         (multiple-value-bind (move-type successful) (make-move game position)
+                           (if successful
+                               (progn
+                                 (broadcast-message session :move
+                                                    :move-type move-type
+                                                    :successful t)
+                                 (send-game-state session))
+                               (api-send client :move
+                                         :reason move-type
+                                         :successful (make-instance 'json-bool :p nil)))
+                           (when-let (winner (winner game))
+                             (stop-session session (string-capitalize winner)
+                                           :status +ws-code-game-over+)))
+                         (api-send client :move
+                                   :successful nil
+                                   :reason :invalid-position)))))))))
 
 (defun new-game-dispatcher (request)
   (when (string= (hunchentoot:script-name request) "/new")
