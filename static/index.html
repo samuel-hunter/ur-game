@@ -86,6 +86,9 @@
         <div id="dice-pool">
         </div>
         <button id="roll-button" onclick="roll()" disabled>Roll</button>
+        <button onclick="document.getElementById('roll-button').disabled=false">
+          Roll button stuck?
+        </button>
 
         <svg id="die-template" class="hidden" viewBox="-2 -2 102 90">
           <g stroke="black" stroke-width="0.5">
