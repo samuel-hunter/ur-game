@@ -11,7 +11,8 @@
                :hunchensocket
                :osicat
                :session-token)
-  :components ((:file "engine")
+  :components ((:file "json")
+               (:file "engine" :depends-on ("json"))
                (:file "config")
                (:file "repl" :depends-on ("engine"))
-               (:file "ur-game" :depends-on ("engine" "config"))))
+               (:file "ur-game" :depends-on ("engine" "config" "json"))))

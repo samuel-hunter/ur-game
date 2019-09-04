@@ -1,5 +1,5 @@
 (defpackage #:ur-game.engine
-  (:use :cl)
+  (:use :cl :ur-game.json)
   (:export :+start-length+
            :+shared-length+
            :+end-length+
@@ -23,7 +23,9 @@
            :player-spare-pieces
            :opponent-spare-pieces
            :make-move
-           :winner))
+           :winner
+
+           :action-successful))
 
 (in-package #:ur-game.engine)
 
@@ -60,6 +62,13 @@
    (turn :initform :white :reader turn)
    (random-state :initform (make-random-state t))
    (last-roll :initform nil)))
+
+(defmethod encode-json ((object game) &optional (stream json:*json-output*))
+  (encode-json-select-slots object
+                            '(white-start black-start shared-path white-end
+                              black-end white-spare-pieces black-spare-pieces
+                              turn last-roll)
+                            stream))
 
 (defun player-spare-pieces (game)
   (with-slots (turn white-spare-pieces black-spare-pieces) game
@@ -229,7 +238,8 @@
 played in the original game. Store the sum in the game."
   (with-slots (random-state last-roll) game
     (when last-roll
-      (return-from roll (list :successful nil
+      (return-from roll (list :successful (make-instance 'json-bool
+                                                         :p nil)
                               :reason :already-rolled)))
 
     (multiple-value-bind (total flips) (random-roll random-state)
@@ -239,9 +249,13 @@ played in the original game. Store the sum in the game."
                          ((= total 0) :flipped-nothing)
                          ((not (valid-turn-p game)) :no-valid-moves))))
         (when skip-turn (next-turn game))
-        (list :successful t :total ,total
-              :flips ,flips
-              :skip-turn ,skip-turn)))))
+        (list :successful (make-instance 'json-bool
+                                         :p t)
+              :total total
+              :flips flips
+              :skip-turn (make-instance 'json-bool
+                                        :p skip-turn
+                                        :generalised t))))))
 
 (defun move-tile (game index)
   "Move a tile from INDEX to the last roll. Return the destination tile's index."
@@ -270,8 +284,12 @@ played in the original game. Store the sum in the game."
           (if (rosettep dest-index)
               (setf last-roll nil)
               (next-turn game))
-          (list :successful t
+          (list :successful (make-instance 'json-bool
+                                           :p t)
                 :move-type move-type))
-        (list :successful nil
-              :reason move-type))))
-  )
+        (list :successful (make-instance 'json-bool
+                                         :p nil)
+              :reason move-type)))))
+
+(defun action-successful (action-result)
+  (json-bool-p (getf action-result :successful)))

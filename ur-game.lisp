@@ -1,5 +1,6 @@
 (defpackage #:ur-game
-  (:use :cl :ur-game.engine :ur-game.config)
+  (:use :cl :ur-game.engine
+        :ur-game.config :ur-game.json)
   (:import-from :alexandria
                 :switch
                 :when-let)
@@ -31,17 +32,6 @@
 (defvar *game-token-generator*
   (session-token:make-generator :token-length 10))
 
-(defclass json-bool ()
-  ((p :initarg :p :initform nil)
-   (generalised :initarg :generalised :initform nil))
-  (:documentation "An object specifically made to be json-encoded to either true or false."))
-
-(defmethod encode-json ((object json-bool) &optional (stream json:*json-output*))
-  (with-slots (p generalised) object
-    (cond
-      ((and p generalised) (encode-json p stream))
-      (p (princ "true" stream))
-      (t (princ "false" stream)))))
 
 (defclass player-session (hunchensocket:websocket-client)
   ((color :accessor color)))
@@ -72,19 +62,6 @@
 
 (defun broadcast-message* (session opcode &rest data)
   (broadcast-message session opcode data))
-
-(defun encode-json-select-slots (object slots &optional (stream json:*json-output*))
-  "Encode a JSON object with the chosen select slots"
-  (json:with-object (stream)
-    (dolist (slot slots)
-      (json:encode-object-member slot (slot-value object slot) stream))))
-
-(defmethod encode-json ((object game) &optional (stream json:*json-output*))
-  (encode-json-select-slots object
-                            '(white-start black-start shared-path white-end
-                              black-end white-spare-pieces black-spare-pieces
-                              turn last-roll)
-                            stream))
 
 (defun send-game-state (game-session)
   (broadcast-message* game-session :game-state
@@ -147,29 +124,13 @@
        (send-message* client :err
                       :reason :not-your-turn))
       (t (switch (operand :test 'string-equal)
-           ("roll" (let* ((result (roll game))
-                          (successful (getf result :successful))
-                          (skip-turn (getf result :skip-turn)))
-
-                     (setf (getf result :successful)
-                           (make-instance 'json-bool
-                                          :p successful))
-                     (if successful
-                         (progn
-                           (setf (getf result :skip-turn)
-                                 (make-instance 'json-bool
-                                                :p skip-turn
-                                                :generalised t))
-                           (broadcast-message session :roll result))
+           ("roll" (let* ((result (roll game)))
+                     (if (action-successful result)
+                         (broadcast-message session :roll result)
                          (send-message client :roll result))))
            ("move" (let* ((position (cdr (assoc :position message)))
-                          (result (make-move game position))
-                          (successful (getf result :successful)))
-
-                     (setf (getf result :successful)
-                           (make-instance 'json-bool
-                                          :p successful))
-                     (if successful
+                          (result (make-move game position)))
+                     (if (action-successful result)
                          (progn
                            (broadcast-message session :move result)
                            (send-game-state session))
