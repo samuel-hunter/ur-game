@@ -58,14 +58,20 @@
   "Return the session of the current turn's player."
   (session-player session (turn (game session))))
 
-(defun api-send (client opcode &rest data)
+(defun send-message (client opcode &optional data)
   (hunchensocket:send-text-message
    client (encode-json-plist-to-string (list* :op opcode data))))
 
-(defun broadcast-message (session opcode &rest data)
+(defun send-message* (client opcode &rest data)
+  (send-message client opcode data))
+
+(defun broadcast-message (session opcode &optional data)
   (loop :for client :in (hunchensocket:clients session)
      :do (hunchensocket:send-text-message
           client (encode-json-plist-to-string (list* :op opcode data)))))
+
+(defun broadcast-message* (session opcode &rest data)
+  (broadcast-message session opcode data))
 
 (defun encode-json-select-slots (object slots &optional (stream json:*json-output*))
   "Encode a JSON object with the chosen select slots"
@@ -81,8 +87,8 @@
                             stream))
 
 (defun send-game-state (game-session)
-  (broadcast-message game-session :game-state
-                     :game (game game-session)))
+  (broadcast-message* game-session :game-state
+                      :game (game game-session)))
 
 (defvar *games* (make-hash-table :test 'equal))
 
@@ -105,12 +111,13 @@
           (setf (color (first clients)) :black)
           (setf (color (second clients)) :white)))
     (loop :for client :in clients
-       :do (api-send client :welcome :color (color client)))
+       :do (send-message* client :welcome
+                          :color (color client)))
     (send-game-state session)))
 
 (defmethod hunchensocket:client-connected ((session game-session) client)
   (ecase (status session)
-    (:empty (api-send client :game-token :token (token session))
+    (:empty (send-message* client :game-token :token (token session))
             (setf (status session) :waiting))
     (:waiting (start-online-session session))))
 
@@ -120,7 +127,7 @@
 
 (defmethod hunchensocket:client-disconnected ((session game-session) client)
   (unless (eq (status session) :stopped)
-    (stop-session session "Opponent disconnected" :status +ws-code-opponent-disconnected+)))q
+    (stop-session session "Opponent disconnected" :status +ws-code-opponent-disconnected+)))
 
 (defmethod hunchensocket:text-message-received ((session game-session) client message)
   (let* ((message (decode-json-from-string message))
@@ -128,15 +135,17 @@
          (playingp (eq (status session) :playing))
          (operand (message-op message)))
     (cond
-      ((string-equal operand "heartbeat") (api-send client :ack))
-      ((not playingp) (api-send client :err :reason :not-playing-yet))
+      ((string-equal operand "heartbeat") (send-message client :ack))
+      ((not playingp) (send-message* client :err
+                                     :reason :not-playing-yet))
       ((string-equal operand "message")
        (let ((message (cdr (assoc :message message))))
-         (broadcast-message session :message
-                            :message message
-                            :color (color client))))
+         (broadcast-message* session :message
+                             :message message
+                             :color (color client))))
       ((not (eq (color client) (turn game)))
-       (api-send client :err :reason :not-your-turn))
+       (send-message* client :err
+                      :reason :not-your-turn))
       (t (switch (operand :test 'string-equal)
            ("roll" (let* ((result (roll game))
                           (successful (getf result :successful))
@@ -151,8 +160,8 @@
                                  (make-instance 'json-bool
                                                 :p skip-turn
                                                 :generalised t))
-                           (apply 'broadcast-message session :roll result))
-                         (apply 'api-send client :roll result))))
+                           (broadcast-message session :roll result))
+                         (send-message client :roll result))))
            ("move" (let* ((position (cdr (assoc :position message)))
                           (result (make-move game position))
                           (successful (getf result :successful)))
@@ -162,9 +171,9 @@
                                           :p successful))
                      (if successful
                          (progn
-                           (apply 'broadcast-message session :move result)
+                           (broadcast-message session :move result)
                            (send-game-state session))
-                         (apply 'api-send client :move result)))))))))
+                         (send-message client :move result)))))))))
 
 (defun new-game-dispatcher (request)
   (when (string= (hunchentoot:script-name request) "/new")
