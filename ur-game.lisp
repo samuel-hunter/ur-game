@@ -36,7 +36,7 @@
    (generalised :initarg :generalised :initform nil))
   (:documentation "An object specifically made to be json-encoded to either true or false."))
 
-(defmethod encode-json ((object json-bool) &optional stream)
+(defmethod encode-json ((object json-bool) &optional (stream json:*json-output*))
   (with-slots (p generalised) object
     (cond
       ((and p generalised) (encode-json p stream))
@@ -67,23 +67,22 @@
      :do (hunchensocket:send-text-message
           client (encode-json-plist-to-string (list* :op opcode data)))))
 
-(defun game-to-alist (game)
-  (with-slots (white-start black-start shared-path white-end black-end
-                           white-spare-pieces black-spare-pieces turn
-                           rolledp last-roll) game
-    `((:white-start . ,white-start)
-      (:black-start . ,black-start)
-      (:shared-path . ,shared-path)
-      (:white-end . ,white-end)
-      (:black-end . ,black-end)
-      (:white-spare-pieces . ,white-spare-pieces)
-      (:black-spare-pieces . ,black-spare-pieces)
-      (:turn . ,turn)
-      (:last-roll . ,(and rolledp last-roll)))))
+(defun encode-json-select-slots (object slots &optional (stream json:*json-output*))
+  "Encode a JSON object with the chosen select slots"
+  (json:with-object (stream)
+    (dolist (slot slots)
+      (json:encode-object-member slot (slot-value object slot) stream))))
+
+(defmethod encode-json ((object game) &optional (stream json:*json-output*))
+  (encode-json-select-slots object
+                            '(white-start black-start shared-path white-end
+                              black-end white-spare-pieces black-spare-pieces
+                              turn last-roll)
+                            stream))
 
 (defun send-game-state (game-session)
   (broadcast-message game-session :game-state
-                     :game (game-to-alist (game game-session))))
+                     :game (game game-session)))
 
 (defvar *games* (make-hash-table :test 'equal))
 

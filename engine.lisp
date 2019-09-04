@@ -59,8 +59,7 @@
    (black-spare-pieces :initform +starting-pieces+)
    (turn :initform :white :reader turn)
    (random-state :initform (make-random-state t))
-   (last-roll)
-   (rolledp :initform nil)))
+   (last-roll :initform nil)))
 
 (defun player-spare-pieces (game)
   (with-slots (turn white-spare-pieces black-spare-pieces) game
@@ -142,8 +141,8 @@
 
 (defun valid-move (game index)
   "Return two values: Whether the move is valid, and the type of move."
-  (with-slots (rolledp last-roll turn) game
-    (unless rolledp (return-from valid-move (Values nil :not-rolled-yet)))
+  (with-slots (last-roll turn) game
+    (unless last-roll (return-from valid-move (values nil :not-rolled-yet)))
 
     (let ((dest-index (+ index last-roll)))
       (cond
@@ -181,9 +180,9 @@
          :black)))))
 
 (defun next-turn (game)
-  (with-slots (rolledp turn) game
+  (with-slots (last-roll turn) game
     (setf turn (opponent game))
-    (setf rolledp nil)))
+    (setf last-roll nil)))
 
 (defun random-roll (&optional (random-state *random-state*))
   (let ((flips (loop :repeat 4
@@ -228,14 +227,13 @@
 (defun roll (game)
   "Toss four coins and sum the total, providing a similar D4 allegedly
 played in the original game. Store the sum in the game."
-  (with-slots (random-state last-roll rolledp) game
-    (when rolledp
+  (with-slots (random-state last-roll) game
+    (when last-roll
       (return-from roll (values :already-rolled nil)))
 
     (multiple-value-bind (total flips) (random-roll random-state)
 
       (setf last-roll total)
-      (setf rolledp t)
       (cond
         ;; If the roll was 0, the current player has lost their turn.
         ((= total 0)
@@ -264,11 +262,11 @@ played in the original game. Store the sum in the game."
 
 
 (defun make-move (game index)
-  (with-slots (rolledp last-roll turn) game
+  (with-slots (last-roll turn) game
     (multiple-value-bind (is-valid move-type) (valid-move game index)
       (when is-valid
         (let ((dest-index (move-tile game index)))
           (if (rosettep dest-index)
-              (setf rolledp nil)
+              (setf last-roll nil)
               (next-turn game))))
       (values move-type is-valid))))
