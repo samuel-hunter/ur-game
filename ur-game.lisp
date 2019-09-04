@@ -48,23 +48,23 @@
   "Return the session of the current turn's player."
   (session-player session (turn (game session))))
 
-(defun send-message (client opcode &optional data)
+(defun send-message (client &optional data)
   (hunchensocket:send-text-message
-   client (encode-json-plist-to-string (list* :op opcode data))))
+   client (encode-json-plist-to-string data)))
 
-(defun send-message* (client opcode &rest data)
-  (send-message client opcode data))
+(defun send-message* (client &rest data)
+  (send-message client data))
 
-(defun broadcast-message (session opcode &optional data)
+(defun broadcast-message (session &optional data)
   (loop :for client :in (hunchensocket:clients session)
-     :do (hunchensocket:send-text-message
-          client (encode-json-plist-to-string (list* :op opcode data)))))
+     :do (send-message client data)))
 
-(defun broadcast-message* (session opcode &rest data)
-  (broadcast-message session opcode data))
+(defun broadcast-message* (session &rest data)
+  (broadcast-message session data))
 
 (defun send-game-state (game-session)
-  (broadcast-message* game-session :game-state
+  (broadcast-message* game-session
+                      :op :game-state
                       :game (game game-session)))
 
 (defvar *games* (make-hash-table :test 'equal))
@@ -88,13 +88,16 @@
           (setf (color (first clients)) :black)
           (setf (color (second clients)) :white)))
     (loop :for client :in clients
-       :do (send-message* client :welcome
+       :do (send-message* client
+                          :op :welcome
                           :color (color client)))
     (send-game-state session)))
 
 (defmethod hunchensocket:client-connected ((session game-session) client)
   (ecase (status session)
-    (:empty (send-message* client :game-token :token (token session))
+    (:empty (send-message* client
+                           :op :game-token
+                           :token (token session))
             (setf (status session) :waiting))
     (:waiting (start-online-session session))))
 
@@ -112,29 +115,24 @@
          (playingp (eq (status session) :playing))
          (operand (message-op message)))
     (cond
-      ((string-equal operand "heartbeat") (send-message client :ack))
-      ((not playingp) (send-message* client :err
+      ((string-equal operand "heartbeat") (send-message* client :op :ack))
+      ((not playingp) (send-message* client :op :err
                                      :reason :not-playing-yet))
       ((string-equal operand "message")
        (let ((message (cdr (assoc :message message))))
-         (broadcast-message* session :message
+         (broadcast-message* session :op :message
                              :message message
                              :color (color client))))
       ((not (eq (color client) (turn game)))
-       (send-message* client :err
+       (send-message* client :op :err
                       :reason :not-your-turn))
-      (t (switch (operand :test 'string-equal)
-           ("roll" (let* ((result (roll game)))
-                     (if (action-successful result)
-                         (broadcast-message session :roll result)
-                         (send-message client :roll result))))
-           ("move" (let* ((position (cdr (assoc :position message)))
-                          (result (make-move game position)))
-                     (if (action-successful result)
-                         (progn
-                           (broadcast-message session :move result)
-                           (send-game-state session))
-                         (send-message client :move result)))))))))
+      (t (let ((result (process-action game message)))
+           (if (action-successful result)
+               (progn
+                 (broadcast-message session result)
+                 (when (getf result :turn-end)
+                   (send-game-state session)))
+               (send-message client result)))))))
 
 (defun new-game-dispatcher (request)
   (when (string= (hunchentoot:script-name request) "/new")

@@ -153,6 +153,7 @@ function setTurn(color) {
 }
 
 function updateGameState(game) {
+  console.log({action: 'updateGameState', game: game})
   clearBoard()
 
   lastRoll = game.lastRoll

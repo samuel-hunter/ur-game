@@ -1,5 +1,7 @@
 (defpackage #:ur-game.engine
   (:use :cl :ur-game.json)
+  (:import-from :alexandria
+                :switch)
   (:export :+start-length+
            :+shared-length+
            :+end-length+
@@ -17,15 +19,10 @@
            :black-spare-pieces
            :turn
            :last-roll
-           :rolledp
 
-           :roll
-           :player-spare-pieces
-           :opponent-spare-pieces
-           :make-move
            :winner
-
-           :action-successful))
+           :action-successful
+           :process-action))
 
 (in-package #:ur-game.engine)
 
@@ -257,8 +254,8 @@ played in the original game. Store the sum in the game."
                                         :p skip-turn
                                         :generalised t))))))
 
-(defun move-tile (game index)
-  "Move a tile from INDEX to the last roll. Return the destination tile's index."
+(defun move-piece (game index)
+  "Move a piece from tile INDEX to the last roll. Return the destination tile's index."
   (with-slots (last-roll turn) game
     (let ((dest-index (+ index last-roll)))
       (if (= index 0)
@@ -277,19 +274,29 @@ played in the original game. Store the sum in the game."
     (return-from make-move (list :successful nil
                                  :reason :invalid-position)))
 
-  (with-slots (last-roll turn) game
-    (multiple-value-bind (successful move-type) (valid-move game position)
+  (multiple-value-bind (successful move-type) (valid-move game position)
+    (let ((successful-json (make-instance 'json-bool :p successful)))
       (if successful
-        (let ((dest-index (move-tile game position)))
-          (if (rosettep dest-index)
-              (setf last-roll nil)
-              (next-turn game))
-          (list :successful (make-instance 'json-bool
-                                           :p t)
-                :move-type move-type))
-        (list :successful (make-instance 'json-bool
-                                         :p nil)
-              :reason move-type)))))
+          (progn
+            (move-piece game position)
+            (if (eq move-type :landed-on-rosette)
+                (setf (slot-value game 'last-roll) nil)
+                (next-turn game))
+            (list :successful successful-json
+                  :turn-end t
+                  :move-type move-type))
+          (list :successful successful-json
+                :reason move-type)))))
+
+(defun process-action (game action)
+  (switch ((cdr (assoc :op action)) :test 'string-equal)
+    ("roll" (list* :op :roll
+                   (roll game)))
+    ("move" (let ((position (cdr (assoc :position action))))
+              (list* :op :move
+                     (make-move game position))))
+    (otherwise (list :op :err
+                     :reason :no-such-operand))))
 
 (defun action-successful (action-result)
   (json-bool-p (getf action-result :successful)))
