@@ -138,36 +138,33 @@
       ((not (eq (color client) (turn game)))
        (api-send client :err :reason :not-your-turn))
       (t (switch (operand :test 'string-equal)
-           ("roll" (multiple-value-bind (total rolledp flips skip-turn) (roll game)
-                     (if rolledp
-                         (broadcast-message session :roll
-                                            :total total
-                                            :successful t
-                                            :flips flips
-                                            :skip-turn (make-instance 'json-bool
-                                                                      :p skip-turn
-                                                                      :generalised t))
-                         (api-send client :roll
-                                   :successful nil
-                                   :reason total))))
-           ("move" (let ((position (cdr (assoc :position message))))
-                     (if (integerp position)
-                         (multiple-value-bind (move-type successful) (make-move game position)
-                           (if successful
-                               (progn
-                                 (broadcast-message session :move
-                                                    :move-type move-type
-                                                    :successful t)
-                                 (send-game-state session))
-                               (api-send client :move
-                                         :reason move-type
-                                         :successful (make-instance 'json-bool :p nil)))
-                           (when-let (winner (winner game))
-                             (stop-session session (string-capitalize winner)
-                                           :status +ws-code-game-over+)))
-                         (api-send client :move
-                                   :successful nil
-                                   :reason :invalid-position)))))))))
+           ("roll" (let* ((result (roll game))
+                          (successful (getf result :successful))
+                          (skip-turn (getf result :skip-turn)))
+
+                     (setf (getf result :successful)
+                           (make-instance 'json-bool
+                                          :p successful))
+                     (if successful
+                         (progn
+                           (setf (getf result :skip-turn)
+                                 (make-instance 'json-bool
+                                                :p skip-turn
+                                                :generalised t))
+                           (apply 'broadcast-message session :roll result))
+                         (apply 'api-send client :roll result))))
+           ("move" (let* ((position (cdr (assoc :position message)))
+                          (result (make-move game position))
+                          (successful (getf result :successful)))
+
+                     (setf (getf result :successful)
+                           (make-instance 'json-bool
+                                          :p successful))
+                     (if successful
+                         (progn
+                           (apply 'broadcast-message session :move result)
+                           (send-game-state session))
+                         (apply 'api-send client :move result)))))))))
 
 (defun new-game-dispatcher (request)
   (when (string= (hunchentoot:script-name request) "/new")

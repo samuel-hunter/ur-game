@@ -229,22 +229,19 @@
 played in the original game. Store the sum in the game."
   (with-slots (random-state last-roll) game
     (when last-roll
-      (return-from roll (values :already-rolled nil)))
+      (return-from roll (list :successful nil
+                              :reason :already-rolled)))
 
     (multiple-value-bind (total flips) (random-roll random-state)
 
       (setf last-roll total)
-      (cond
-        ;; If the roll was 0, the current player has lost their turn.
-        ((= total 0)
-         (next-turn game)
-         (values total t flips :flipped-nothing))
-        ;; If the player has no valid moves, they skip their turn.
-        ((not (valid-turn-p game))
-         (next-turn game)
-         (values total t flips :no-valid-moves))
-        (t
-         (values total t flips nil))))))
+      (let ((skip-turn (cond
+                         ((= total 0) :flipped-nothing)
+                         ((not (valid-turn-p game)) :no-valid-moves))))
+        (when skip-turn (next-turn game))
+        (list :successful t :total ,total
+              :flips ,flips
+              :skip-turn ,skip-turn)))))
 
 (defun move-tile (game index)
   "Move a tile from INDEX to the last roll. Return the destination tile's index."
@@ -261,12 +258,20 @@ played in the original game. Store the sum in the game."
       dest-index)))
 
 
-(defun make-move (game index)
+(defun make-move (game position)
+  (unless (integerp position)
+    (return-from make-move (list :successful nil
+                                 :reason :invalid-position)))
+
   (with-slots (last-roll turn) game
-    (multiple-value-bind (is-valid move-type) (valid-move game index)
-      (when is-valid
-        (let ((dest-index (move-tile game index)))
+    (multiple-value-bind (successful move-type) (valid-move game position)
+      (if successful
+        (let ((dest-index (move-tile game position)))
           (if (rosettep dest-index)
               (setf last-roll nil)
-              (next-turn game))))
-      (values move-type is-valid))))
+              (next-turn game))
+          (list :successful t
+                :move-type move-type))
+        (list :successful nil
+              :reason move-type))))
+  )
