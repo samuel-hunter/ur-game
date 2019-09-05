@@ -60,7 +60,7 @@
    (random-state :initform (make-random-state t))
    (last-roll :initform nil)))
 
-(defmethod encode-json ((object game) &optional (stream json:*json-output*))
+(defmethod json:encode-json ((object game) &optional (stream json:*json-output*))
   (encode-json-select-slots object
                             '(white-start black-start shared-path white-end
                               black-end white-spare-pieces black-spare-pieces

@@ -5,8 +5,6 @@
                 :switch
                 :when-let)
   (:import-from :json
-                :encode-json
-                :encode-json-to-string
                 :encode-json-plist-to-string
                 :decode-json-from-string)
   (:export :start
@@ -114,7 +112,7 @@
          (game (game session))
          (playingp (eq (status session) :playing))
          (operand (message-op message)))
-    (cond
+   (cond
       ((string-equal operand "heartbeat") (send-message* client :op :ack))
       ((not playingp) (send-message* client :op :err
                                      :reason :not-playing-yet))
