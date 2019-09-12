@@ -3,7 +3,8 @@
         :ur-game.config :ur-game.json)
   (:import-from :alexandria
                 :switch
-                :when-let)
+                :when-let
+                :whichever)
   (:import-from :json
                 :encode-json-plist-to-string
                 :decode-json-from-string)
@@ -22,7 +23,6 @@
 (defparameter +join-url-scanner+ (cl-ppcre:create-scanner "^/join/([\\w]+)$"))
 
 (defconstant +ws-code-opponent-disconnected+ 4000)
-(defconstant +ws-code-game-over+ 4001)
 
 ;; NOTE: The default generator from `session-token' grabs randomness
 ;; form /dev/urandom or /dev/arandom, and therefore doesn't work on
@@ -35,7 +35,7 @@
   ((color :accessor color)))
 
 (defclass game-session (hunchensocket:websocket-resource)
-  ((game :initform (make-instance 'game) :reader game)
+  ((game :accessor game)
    (token :initarg :token :reader token)
    (white-token :initform (funcall *game-token-generator*))
    (black-token :initform (funcall *game-token-generator*))
@@ -76,15 +76,16 @@
 
 (defun start-online-session (session)
   (setf (status session) :playing)
-  (let ((clients (hunchensocket:clients session))
-        (first-client-white-p (zerop (random 2))))
-    (if first-client-white-p
-        (progn
+  (setf (game session) (make-instance 'game))
+  (let ((clients (hunchensocket:clients session)))
+    (whichever
+     (progn
           (setf (color (first clients)) :white)
           (setf (color (second clients)) :black))
-        (progn
+     (progn
           (setf (color (first clients)) :black)
           (setf (color (second clients)) :white)))
+
     (loop :for client :in clients
        :do (send-message* client
                           :op :welcome
@@ -110,17 +111,21 @@
 (defmethod hunchensocket:text-message-received ((session game-session) client message)
   (let* ((message (decode-json-from-string message))
          (game (game session))
-         (playingp (eq (status session) :playing))
          (operand (message-op message)))
    (cond
-      ((string-equal operand "heartbeat") (send-message* client :op :ack))
-      ((not playingp) (send-message* client :op :err
-                                     :reason :not-playing-yet))
-      ((string-equal operand "message")
-       (let ((message (cdr (assoc :message message))))
-         (broadcast-message* session :op :message
-                             :message message
-                             :color (color client))))
+     ((string-equal operand "heartbeat")
+      (send-message* client :op :ack))
+     ((string-equal operand "rematch")
+      (if (eq (status session) :game-over)
+          (start-online-session session)
+          (send-message* client :op :err :reason :not-game-over)))
+     ((not (eq (status session) :playing))
+      (send-message* client :op :err :reason :not-playing-yet))
+     ((string-equal operand "message")
+      (let ((message (cdr (assoc :message message))))
+        (broadcast-message* session :op :message
+                            :message message
+                            :color (color client))))
       ((not (eq (color client) (turn game)))
        (send-message* client :op :err
                       :reason :not-your-turn))
@@ -130,7 +135,13 @@
                  (broadcast-message session result)
                  (when (getf result :turn-end)
                    (send-game-state session)))
-               (send-message client result)))))))
+               (send-message client result))
+
+           (when-let (winner (winner game))
+             (setf (status session) :game-over)
+             (broadcast-message* session
+                                 :op :game-over
+                                 :winner winner)))))))
 
 (defun new-game-dispatcher (request)
   (when (string= (hunchentoot:script-name request) "/new")
@@ -196,3 +207,9 @@
 
   (values (hunchentoot:start *http-acceptor*)
           (hunchentoot:start *ws-acceptor*)))
+
+(defun set-deathmatch (session-token)
+  "Given a session token, set the spare pieces of both players to 1. For debug purposes"
+  (with-slots (white-spare-pieces black-spare-pieces) (game (find-session session-token))
+    (setf white-spare-pieces 1)
+    (setf black-spare-pieces 1)))

@@ -169,20 +169,26 @@
   (loop for index :from 0 :to +path-length+
      :when (valid-move game index) :do (return t)))
 
+(defun player-tiles (game player)
+  "Return a vector of all the players' tiles"
+  (with-slots (white-start black-start shared-path white-end black-end) game
+    (ecase player
+      (:white (concatenate 'vector white-start shared-path white-end))
+      (:black (concatenate 'vector black-start shared-path black-end)))))
+
 (defun winner (game)
   "Return the winner of the game, or NIL if the game is still going."
-  (flet ((is-player-empty (path player)
-           (loop :for tile :across path
+  (flet ((is-player-empty (player)
+           (loop :for tile :across (player-tiles game player)
               :when (eq tile player) :do (return nil)
               :finally (return t))))
-    (with-slots (white-spare-pieces black-spare-pieces white-start black-start
-                                    shared-path white-end black-end) game
+    (with-slots (white-spare-pieces black-spare-pieces) game
       (cond
         ((and (= white-spare-pieces 0)
-              (is-player-empty (concatenate 'vector white-start shared-path white-end) :white))
+              (is-player-empty :white))
          :white)
         ((and (= black-spare-pieces 0)
-              (is-player-empty (concatenate 'vector black-start shared-path black-end) :black))
+              (is-player-empty :black))
          :black)))))
 
 (defun next-turn (game)

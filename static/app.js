@@ -6,7 +6,6 @@ let lastRoll = null
 let webSocket
 
 const socketCodeOpponentDisconnected = 4000
-const socketCodeGameOver = 4001
 
 function toPlayer(color) {
   if (playerColor == 'white' ^ color == 'white') {
@@ -153,6 +152,7 @@ function setTurn(color) {
 }
 
 function updateGameState(game) {
+  document.getElementById('post-game-options').classList.add('hidden')
   console.log({action: 'updateGameState', game: game})
   clearBoard()
 
@@ -297,8 +297,13 @@ function copyInvite() {
 }
 
 function gameOver(reason) {
-  document.getElementById('post-game-options').classList.remove('hidden')
   logActivity('game', 'Game over: ' + reason)
+
+  if (webSocket.readyState === WebSocket.OPEN) {
+    document.getElementById('post-game-options').classList.remove('hidden')
+  } else {
+    document.getElementById('disconnected-options').classList.remove('hidden')
+  }
 
   document.getElementById('roll-button').disabled = true
   turn = null
@@ -306,11 +311,16 @@ function gameOver(reason) {
   updateTooltip()
 }
 
+function rematch() {
+  sendMessage({op: 'rematch'})
+}
+
 function connect(token) {
   // Clear message box
   document.getElementById('messages').innerHTML = ''
 
-  document.getElementById('post-game-options').classList.add('hidden')
+  // Hide relevant button group
+  document.getElementById('disconnected-options').classList.add('hidden')
 
   let socketUrl
   if (window.location.protocol === 'https:') {
@@ -405,6 +415,9 @@ function connect(token) {
     case 'message':
       showComment(toPlayer(data.color), data.message)
       break
+    case 'gameOver':
+      gameOver(data.winner + ' wins')
+      break
     case 'err':
       logActivity('game', "Error: " + data.reason)
       break
@@ -419,13 +432,11 @@ function connect(token) {
   }
 
   webSocket.onclose = function (event) {
+
     if (event.wasClean) {
       switch (event.code) {
       case socketCodeOpponentDisconnected:
         gameOver('Opponent disconnected')
-        break
-      case socketCodeGameOver:
-        gameOver(event.reason + ' won')
         break
       default:
         gameOver(`Connection closed cleanly; code=${event.code}, reason="${event.reason}"`)
