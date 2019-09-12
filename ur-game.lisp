@@ -110,7 +110,6 @@
 
 (defmethod hunchensocket:text-message-received ((session game-session) client message)
   (let* ((message (decode-json-from-string message))
-         (game (game session))
          (operand (message-op message)))
    (cond
      ((string-equal operand "heartbeat")
@@ -126,10 +125,12 @@
         (broadcast-message* session :op :message
                             :message message
                             :color (color client))))
-      ((not (eq (color client) (turn game)))
+      ((not (eq (color client) (turn (game session))))
        (send-message* client :op :err
                       :reason :not-your-turn))
-      (t (let ((result (process-action game message)))
+      (t (let* ((game (game session))
+                (result (process-action game message)))
+
            (if (action-successful result)
                (progn
                  (broadcast-message session result)

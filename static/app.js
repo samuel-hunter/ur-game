@@ -269,6 +269,17 @@ function roll() {
   sendMessage({op: 'roll'})
 }
 
+// Roll when the 'r' key is pressed
+document.body.addEventListener('keypress', function (event) {
+  // Block when typing in chat.
+  if (document.activeElement.tagName === 'INPUT') return
+
+  // Block when the roll button is disabled.
+  if (document.getElementById('roll-button').disabled) return
+
+  if (event.key === 'r') roll()
+})
+
 function sendMessage(data) {
   // Heartbeat messages are annoying; don't print them out
   if (data.op !== 'heartbeat') {
