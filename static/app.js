@@ -182,6 +182,10 @@ function updateGameState(game) {
   setSparePieces('white', game.whiteSparePieces)
   setSparePieces('black', game.blackSparePieces)
 
+  for (let gameButton of document.getElementsByClassName('game-button')) {
+    gameButton.disabled = false
+  }
+
   setTurn(game.turn, game.lastRoll)
 }
 
@@ -269,16 +273,29 @@ function roll() {
   sendMessage({op: 'roll'})
 }
 
-// Roll when the 'r' key is pressed
+function offerDraw() {
+  sendMessage({op: 'draw'})
+}
+
+function forfeit() {
+  sendMessage({op: 'forfeit'})
+}
+
+// Roll, offer draw, or forfeit when its respective keys are
+// pressed
 document.body.addEventListener('keypress', function (event) {
   // Block when typing in chat.
   if (document.activeElement.tagName === 'INPUT') return
 
   // Block when the roll button is disabled.
-  if (document.getElementById('roll-button').disabled) return
+  if (event.key === 'r' &&
+      !document.getElementById('roll-button').disabled) roll()
 
-  if (event.key === 'r') roll()
+  if (event.key === 'd') offerDraw()
+  if (event.key === 'f') forfeit()
+
 })
+
 
 function sendMessage(data) {
   // Heartbeat messages are annoying; don't print them out
@@ -316,6 +333,9 @@ function gameOver(reason) {
     document.getElementById('disconnected-options').classList.remove('hidden')
   }
 
+  for (let gameButton of document.getElementsByClassName('game-button')) {
+    gameButton.disabled = true
+  }
   document.getElementById('roll-button').disabled = true
   turn = null
   lastRoll = null
@@ -427,7 +447,17 @@ function connect(token) {
       showComment(toPlayer(data.color), data.message)
       break
     case 'gameOver':
-      gameOver(data.winner + ' wins')
+      if (data.winner === null) {
+        gameOver("It's a tie")
+      } else {
+        gameOver(data.winner + ' wins')
+      }
+      break
+    case 'tie':
+      logActivity(data.player, 'offers a tie')
+      break
+    case 'forfeit':
+      logActivity(data.player, 'forfeits')
       break
     case 'err':
       logActivity('game', "Error: " + data.reason)

@@ -32,7 +32,8 @@
 
 
 (defclass player-session (hunchensocket:websocket-client)
-  ((color :accessor color)))
+  ((color :accessor color)
+   (offered-draw :accessor offered-draw)))
 
 (defclass game-session (hunchensocket:websocket-resource)
   ((game :accessor game)
@@ -87,9 +88,11 @@
           (setf (color (second clients)) :white)))
 
     (loop :for client :in clients
-       :do (send-message* client
-                          :op :welcome
-                          :color (color client)))
+       :do (progn
+             (setf (offered-draw client) nil)
+             (send-message* client
+                            :op :welcome
+                            :color (color client))))
     (send-game-state session)))
 
 (defmethod hunchensocket:client-connected ((session game-session) client)
@@ -108,23 +111,40 @@
   (unless (eq (status session) :stopped)
     (stop-session session "Opponent disconnected" :status +ws-code-opponent-disconnected+)))
 
+(defun stop-game (session winner)
+  (setf (status session) :game-over)
+  (broadcast-message* session
+                      :op :game-over
+                      :winner winner))
+
 (defmethod hunchensocket:text-message-received ((session game-session) client message)
   (let* ((message (decode-json-from-string message))
          (operand (message-op message)))
-   (cond
-     ((string-equal operand "heartbeat")
-      (send-message* client :op :ack))
-     ((string-equal operand "rematch")
-      (if (eq (status session) :game-over)
-          (start-online-session session)
-          (send-message* client :op :err :reason :not-game-over)))
-     ((not (eq (status session) :playing))
-      (send-message* client :op :err :reason :not-playing-yet))
-     ((string-equal operand "message")
-      (let ((message (cdr (assoc :message message))))
-        (broadcast-message* session :op :message
-                            :message message
-                            :color (color client))))
+    (cond
+      ((string-equal operand "heartbeat")
+       (send-message* client :op :ack))
+      ((string-equal operand "message")
+       (let ((message (cdr (assoc :message message))))
+         (broadcast-message* session :op :message
+                             :message message
+                             :color (color client))))
+      ((string-equal operand "rematch")
+       (if (eq (status session) :game-over)
+           (start-online-session session)
+           (send-message* client :op :err :reason :not-game-over)))
+      ((not (eq (status session) :playing))
+       (send-message* client :op :err :reason :not-playing-yet))
+      ((string-equal operand "draw")
+       (setf (offered-draw client) t)
+       (if (every 'identity (loop :for c :in (hunchensocket:clients session)
+                               :collect (offered-draw c)))
+           (stop-game session nil)
+           (broadcast-message* session :op :tie
+                               :player (color client))))
+      ((string-equal operand "forfeit")
+       (broadcast-message* session :op :forfeit
+                           :player (color client))
+       (stop-game session (opponent-player (color client))))
       ((not (eq (color client) (turn (game session))))
        (send-message* client :op :err
                       :reason :not-your-turn))
@@ -133,16 +153,16 @@
 
            (if (action-successful result)
                (progn
+                 (loop :for c :in (hunchensocket:clients session)
+                    :do (setf (offered-draw c) nil))
+
                  (broadcast-message session result)
                  (when (getf result :turn-end)
                    (send-game-state session)))
                (send-message client result))
 
            (when-let (winner (winner game))
-             (setf (status session) :game-over)
-             (broadcast-message* session
-                                 :op :game-over
-                                 :winner winner)))))))
+             (stop-game session winner)))))))
 
 (defun new-game-dispatcher (request)
   (when (string= (hunchentoot:script-name request) "/new")

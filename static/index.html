@@ -88,10 +88,15 @@
         </div>
         <div id="dice-pool">
         </div>
-        <button id="roll-button" onclick="roll()" disabled>(R)oll</button>
+        <button id="roll-button" class="game-button"
+                onclick="roll()" disabled>(R)oll</button>
         <button onclick="document.getElementById('roll-button').disabled=false">
           Roll button stuck?
         </button>
+        <button id="draw-button" class="game-button"
+                onclick="offerDraw()" disabled>(D)raw</button>
+        <button id="forfeit-button" class="game-button"
+                onclick="forfeit()" disabled>(F)orfeit</button>
 
         <svg id="die-template" class="hidden" viewBox="-2 -2 102 90">
           <g stroke="black" stroke-width="0.5">

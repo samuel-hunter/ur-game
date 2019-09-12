@@ -9,6 +9,8 @@
 
            :rosettep
 
+           :opponent-player
+
            :game
            :white-start
            :black-start
@@ -91,11 +93,14 @@
       (:white (setf black-spare-pieces new-value))
       (:black (setf white-spare-pieces new-value)))))
 
-(defun opponent (game)
-  "Retun the player waiting for their turn."
-  (ecase (turn game)
+(defun opponent-player (player)
+  (ecase player
     (:white :black)
     (:black :white)))
+
+(defun opponent (game)
+  "Retun the player waiting for their turn."
+  (opponent-player (turn game)))
 
 (defun player-start (game)
   (with-slots (turn white-start black-start) game
