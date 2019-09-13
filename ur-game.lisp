@@ -30,6 +30,10 @@
 (defvar *game-token-generator*
   (session-token:make-generator :token-length 10))
 
+(defun log-message (message)
+  (when (config :debug)
+    (pprint message)))
+
 
 (defclass player-session (hunchensocket:websocket-client)
   ((color :accessor color)
@@ -48,6 +52,7 @@
   (session-player session (turn (game session))))
 
 (defun send-message (client &optional data)
+  (log-message (list :sending :client client :message data))
   (hunchensocket:send-text-message
    client (encode-json-plist-to-string data)))
 
@@ -120,6 +125,7 @@
 (defmethod hunchensocket:text-message-received ((session game-session) client message)
   (let* ((message (decode-json-from-string message))
          (operand (message-op message)))
+    (log-message (list :received :client client :message message))
     (cond
       ((string-equal operand "heartbeat")
        (send-message* client :op :ack))
