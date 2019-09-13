@@ -7,12 +7,9 @@ let webSocket
 
 const socketCodeOpponentDisconnected = 4000
 
+// Convert `white' or `black' to `you' or `opponent'.
 function toPlayer(color) {
-  if (playerColor == 'white' ^ color == 'white') {
-    return 'opponent'
-  } else {
-    return 'you'
-  }
+  return (playerColor === color) ? 'you' : 'opponent'
 }
 
 function getTile(color, position) {
@@ -36,6 +33,7 @@ function isValidDestination(position) {
 }
 
 function updateTooltip(message) {
+  // Set the default message if a custom message isn't given.
   if (message === undefined) {
     if (turn === null) {
       message = 'Game over'
@@ -147,7 +145,7 @@ function setTurn(color) {
     logActivity('game', "It is your opponent's turn")
   }
 
-  // Enable the roll button whenever it's your turn
+  // Enable the roll button whenever it's your turn and you haven't rolled yet
   document.getElementById('roll-button').disabled = lastRoll || (turn !== playerColor)
 }
 
@@ -351,6 +349,49 @@ function rematch() {
   sendMessage({op: 'rematch'})
 }
 
+function rollDice(total, flips, skipTurn, reason) {
+  if (turn === playerColor) {
+    lastRoll = total
+    setDice(flips)
+  }
+
+  let message = 'rolled a ' + total
+  switch (skipTurn) {
+  case 'flippedNothing':
+    message += ' and skipped a turn'
+    break
+  case 'noValidMoves':
+    message += ', and with no valid moves, skipped a turn'
+    break
+  }
+  logActivity(toPlayer(turn), message)
+
+  if (skipTurn) {
+    if (turn === 'white') {
+      setTurn('black')
+    } else {
+      setTurn('white')
+    }
+  }
+}
+
+function getMoveMessage(moveType) {
+  switch (moveType) {
+  case 'movedPiece':
+    return 'moved a piece'
+    break
+  case 'completedPiece':
+    return "completed a piece's full trip"
+    break
+  case 'landedOnRosette':
+    return 'landed on a rosette, netting an extra turn'
+    break
+  case 'capturedPiece':
+    return 'captured an enemy piece'
+    break
+  }
+}
+
 function connect(token) {
   // Clear message box
   document.getElementById('messages').innerHTML = ''
@@ -397,53 +438,14 @@ function connect(token) {
       break
     case 'roll':
       if (data.successful) {
-        if (turn === playerColor) {
-          lastRoll = data.total
-          setDice(data.flips)
-        }
-
-        let message = 'rolled a ' + data.total
-        switch (data.skipTurn) {
-        case 'flippedNothing':
-          message += ' and skipped a turn'
-          break
-        case 'noValidMoves':
-          message += ', and with no valid moves, skipped a turn'
-          break
-        }
-        logActivity(toPlayer(turn), message)
-
-        if (data.skipTurn) {
-          if (turn === 'white') {
-            setTurn('black')
-          } else {
-            setTurn('white')
-          }
-        }
+        rollDice(data.total, data.flips, data.skipTurn, data.reason)
       } else {
         logActivity('game', "Can't roll: " + data.reason)
       }
       break
     case 'move':
       if (data.successful) {
-        let message = 'moved a piece'
-
-        switch (data.moveType) {
-        case 'movedPiece':
-          message = 'moved a piece'
-          break
-        case 'completedPiece':
-          message = "completed a piece's full trip"
-          break
-        case 'landedOnRosette':
-          message = 'landed on a rosette, netting an extra turn'
-          break
-        case 'capturedPiece':
-          message = 'captured an enemy piece'
-          break
-        }
-
-        logActivity(toPlayer(turn), message)
+        logActivity(toPlayer(turn), getMoveMessage(data.moveType))
       } else {
         logActivity('game', "Can't move: " + data.reason)
       }
