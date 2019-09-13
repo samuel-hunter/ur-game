@@ -388,7 +388,7 @@ function connect(token) {
     case 'welcome':
       hideInvite()
       playerColor = data.color
-      logActivity('game', 'Welcome. You are ' + playerColor)
+      logActivity('game', 'Welcome. You are playing ' + playerColor)
       break
     case 'gameState':
       updateGameState(data.game)
@@ -453,9 +453,11 @@ function connect(token) {
       break
     case 'gameOver':
       if (data.winner === null) {
-        gameOver("It's a tie")
+        gameOver("it's a tie")
+      } else if (data.winner === playerColor) {
+        gameOver('you win')
       } else {
-        gameOver(data.winner + ' wins')
+        gameOver('opponent wins')
       }
       break
     case 'tie':
@@ -482,15 +484,15 @@ function connect(token) {
     if (event.wasClean) {
       switch (event.code) {
       case socketCodeOpponentDisconnected:
-        gameOver('Opponent disconnected')
+        gameOver('opponent disconnected')
         break
       default:
-        gameOver(`Connection closed cleanly; code=${event.code}, reason="${event.reason}"`)
+        gameOver(`connection closed cleanly; code=${event.code}, reason="${event.reason}"`)
         break
       }
     } else if (event.target === webSocket) {
       // Connection died on present websocket, and no new connection has been made.
-      gameOver('Connection died')
+      gameOver('connection died')
     }
 
   }
@@ -505,11 +507,10 @@ function connect(token) {
       connect()
     } else {
       console.error(error)
-      let message = error.message
-      if (message) {
-        gameOver('Socket error: ' + error.message)
+      if (error.message) {
+        gameOver('socket error: ' + error.message)
       } else {
-        gameOver('Socket error')
+        gameOver('socket error')
       }
     }
 
