@@ -327,10 +327,15 @@ function copyInvite() {
 function gameOver(reason) {
   logActivity('game', 'Game over: ' + reason)
 
+  let postGameOptions = document.getElementById('post-game-options')
+  let disconnectedOptions = document.getElementById('disconnected-options')
+
   if (webSocket.readyState === WebSocket.OPEN) {
-    document.getElementById('post-game-options').classList.remove('hidden')
+    postGameOptions.classList.remove('hidden')
+    disconnectedOptions.classList.add('hidden')
   } else {
-    document.getElementById('disconnected-options').classList.remove('hidden')
+    disconnectedOptions.classList.remove('hidden')
+    postGameOptions.classList.add('hidden')
   }
 
   for (let gameButton of document.getElementsByClassName('game-button')) {
@@ -486,8 +491,8 @@ function connect(token) {
     } else if (event.target === webSocket) {
       // Connection died on present websocket, and no new connection has been made.
       gameOver('Connection died')
-      logActivity('game', 'connection died')
     }
+
   }
 
   webSocket.onerror = function (error) {
