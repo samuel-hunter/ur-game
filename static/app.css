@@ -27,15 +27,32 @@ h1 {
 
 #game-container {
     display: grid;
-    grid-template-columns: 8fr 4fr;
+    grid-template-areas:
+        "board message"
+        "board dice";
+    grid-template-columns: 1fr 1fr;
+}
+
+@media screen and (max-width: 800px) {
+    #game-container {
+        grid-template-areas:
+            "dice"
+            "board"
+            "message";
+        grid-template-columns: 1fr;
+    }
 }
 
 #game-set {
-    grid-column-start: 1;
+    grid-area: board;
 }
 
-#game-aside {
-    grid-column-start: 2;
+#message-box {
+    grid-area: message;
+}
+
+#actions {
+    grid-area: dice;
 }
 
 /* Game set */
@@ -156,7 +173,7 @@ h1 {
 }
 
 #messages {
-    height: 25em;
+    height: 50vh;
     overflow-y: scroll;
     border: 1px solid darkgrey;
 }
@@ -186,7 +203,7 @@ h1 {
 /* dice */
 
 .die {
-    width: 7em;
+    width: 10vh;
     margin: 5px;
 }
 
