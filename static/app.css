@@ -30,7 +30,7 @@ h1 {
     grid-template-areas:
         "board message"
         "board dice";
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 2fr 1fr;
 }
 
 @media screen and (max-width: 800px) {
