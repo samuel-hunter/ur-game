@@ -14,5 +14,4 @@
   :components ((:file "json")
                (:file "engine" :depends-on ("json"))
                (:file "config")
-               (:file "repl" :depends-on ("engine"))
                (:file "ur-game" :depends-on ("engine" "config" "json"))))
