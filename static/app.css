@@ -154,7 +154,15 @@ h1 {
 .pool .piece {
     width: 5em;
     height: 5em;
-    margin: 0 3px;
+    margin: 0 -3em 0 3px;
+}
+
+.pool .piece.white {
+    filter: drop-shadow(-0.1em 0 0.1em grey);
+}
+
+.pool .piece.black {
+    filter: drop-shadow(-0.1em 0 0.1em black);
 }
 
 .piece[data-player=you]:not(.invalid-move) {
