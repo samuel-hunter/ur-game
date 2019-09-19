@@ -7,20 +7,12 @@
            :+end-length+
            :+path-length+
 
-           :rosettep
-
-           :opponent-player
-
+           :opponent-color
            :game
-           :white-start
-           :black-start
-           :shared-path
-           :white-end
-           :black-end
-           :white-spare-pieces
-           :black-spare-pieces
-           :turn
-           :last-roll
+
+           :white-player
+           :black-player
+           :spare-pieces
 
            :winner
            :action-successful
@@ -49,106 +41,88 @@
   "Return whether the tile has a rosette"
   (member index +rosettes+))
 
+(defclass player ()
+  ((start-path :initform (make-empty-path +start-length+)
+               :accessor start-path)
+   (end-path :initform (make-empty-path +end-length+)
+             :accessor end-path)
+   (spare-pieces :initform +starting-pieces+
+                 :accessor spare-pieces)))
 
 (defclass game ()
-  ((white-start :initform (make-empty-path +start-length+))
-   (black-start :initform (make-empty-path +start-length+))
-   (shared-path :initform (make-empty-path +shared-length+))
-   (white-end :initform (make-empty-path +end-length+))
-   (black-end :initform (make-empty-path +end-length+))
-   (white-spare-pieces :initform +starting-pieces+)
-   (black-spare-pieces :initform +starting-pieces+)
-   (turn :initform :white :reader turn)
+  ((white :initform (make-instance 'player)
+          :reader white-player)
+   (black :initform (make-instance 'player)
+          :reader black-player)
+   (shared-path :initform (make-empty-path +shared-length+)
+                :accessor shared-path)
+   (turn :initform :white
+         :accessor turn)
    (random-state :initform (make-random-state t))
    (last-roll :initform nil)))
 
 (defmethod json:encode-json ((object game) &optional (stream json:*json-output*))
   (encode-json-select-slots object
-                            '(white-start black-start shared-path white-end
-                              black-end white-spare-pieces black-spare-pieces
-                              turn last-roll)
+                            '(white black shared-path turn last-roll)
                             stream))
 
-(defun player-spare-pieces (game)
-  (with-slots (turn white-spare-pieces black-spare-pieces) game
-    (ecase turn
-      (:white white-spare-pieces)
-      (:black black-spare-pieces))))
-
-(defun (setf player-spare-pieces) (new-value game)
-  (with-slots (turn white-spare-pieces black-spare-pieces) game
-    (ecase turn
-      (:white (setf white-spare-pieces new-value))
-      (:black (setf black-spare-pieces new-value)))))
-
-(defun opponent-spare-pieces (game)
-  (with-slots (turn white-spare-pieces black-spare-pieces) game
-    (ecase turn
-      (:white black-spare-pieces)
-      (:black white-spare-pieces))))
-
-(defun (setf opponent-spare-pieces) (new-value game)
-  (with-slots (turn white-spare-pieces black-spare-pieces) game
-    (ecase turn
-      (:white (setf black-spare-pieces new-value))
-      (:black (setf white-spare-pieces new-value)))))
-
-(defun opponent-player (player)
-  (ecase player
+(defun opponent-color (color)
+  (format t "opponent-color ~s ~a~%" color (member color '(:white :black)))
+  (ecase color
     (:white :black)
     (:black :white)))
 
-(defun opponent (game)
+(defun game-player (game color)
+  (format t "Gaem-player ~s ~a~%" color (member color '(:white :black)))
+  (with-slots (white black) game
+    (ecase color
+      (:white white)
+      (:black black))))
+
+(defun active-player (game)
+  (game-player game (turn game)))
+
+(defun opponent-player (game)
   "Retun the player waiting for their turn."
-  (opponent-player (turn game)))
-
-(defun player-start (game)
-  (with-slots (turn white-start black-start) game
-    (ecase turn
-      (:white white-start)
-      (:black black-start))))
-
-(defun player-end (game)
-  (with-slots (turn white-end black-end) game
-    (ecase turn
-      (:white white-end)
-      (:black black-end))))
+  (game-player game (opponent-color (turn game))))
 
 (defun player-tile (game index)
   "Return ownership of the player's effective tile by index."
 
   (decf index) ; 1-based; playing from tile 0 means placing a new piece on the table.
 
-  (let ((shared-index (- index +start-length+))
+  (let ((player (active-player game))
+        (shared-index (- index +start-length+))
         (end-index (- index +start-length+ +shared-length+)))
     (cond
       ;; Return from the players' starting path if within its range
       ((< index +start-length+)
-       (aref (player-start game) index))
+       (aref (start-path player) index))
       ;; Otherwise, return from the shared path if within +that+ range
       ((< shared-index +shared-length+)
-       (aref (slot-value game 'shared-path) shared-index))
+       (aref (shared-path game) shared-index))
       ;; Finally, the ending path is the last portion, so alway fall back to
       ;; accessing from here.
-    (t (aref (player-end game) end-index)))))
+    (t (aref (end-path player) end-index)))))
 
 (defun (setf player-tile) (new-owner game index)
   "Set the ownership of the player's effective tile by index."
 
   (decf index) ; 1-based; playing from tile 0 means placing a new piece on the table.
 
-  (let ((shared-index (- index +start-length+))
+  (let ((player (active-player game))
+        (shared-index (- index +start-length+))
         (end-index (- index +start-length+ +shared-length+)))
     (cond
       ;; Return from the players' starting path if within its range
       ((< index +start-length+)
-       (setf (aref (player-start game) index) new-owner))
+       (setf (aref (start-path player) index) new-owner))
       ;; Otherwise, return from the shared path if within +that+ range
       ((< shared-index +shared-length+)
-       (setf (aref (slot-value game 'shared-path) shared-index) new-owner))
+       (setf (aref (shared-path game) shared-index) new-owner))
       ;; Finally, the ending path is the last portion, so alway fall back to
       ;; accessing from here.
-      (t (setf (aref (player-end game) end-index) new-owner)))))
+      (t (setf (aref (end-path player) end-index) new-owner)))))
 
 (defun valid-move (game index)
   "Return two values: Whether the move is valid, and the type of move."
@@ -158,7 +132,7 @@
     (let ((dest-index (+ index last-roll)))
       (cond
         ((< index 0) (values nil :bad-tile))
-        ((and (zerop index) (zerop (player-spare-pieces game))) (values nil :no-spare-pieces))
+        ((and (zerop index) (zerop (spare-pieces (active-player game)))) (values nil :no-spare-pieces))
         ((> dest-index (1+ +path-length+)) (values nil :too-far))
         ((and (> index 0) (not (eq (player-tile game index) turn))) (values nil :unowned-tile))
         ((= dest-index (1+ +path-length+)) (values t :completed-piece))
@@ -174,12 +148,13 @@
   (loop for index :from 0 :to +path-length+
      :when (valid-move game index) :do (return t)))
 
-(defun player-tiles (game player)
+(defun player-tiles (game color)
   "Return a vector of all the players' tiles"
-  (with-slots (white-start black-start shared-path white-end black-end) game
-    (ecase player
-      (:white (concatenate 'vector white-start shared-path white-end))
-      (:black (concatenate 'vector black-start shared-path black-end)))))
+  (let ((player (game-player game color)))
+    (concatenate 'vector
+                 (start-path player)
+                 (shared-path game)
+                 (end-path player))))
 
 (defun winner (game)
   "Return the winner of the game, or NIL if the game is still going."
@@ -187,18 +162,17 @@
            (loop :for tile :across (player-tiles game player)
               :when (eq tile player) :do (return nil)
               :finally (return t))))
-    (with-slots (white-spare-pieces black-spare-pieces) game
-      (cond
-        ((and (= white-spare-pieces 0)
-              (is-player-empty :white))
-         :white)
-        ((and (= black-spare-pieces 0)
-              (is-player-empty :black))
-         :black)))))
+    (cond
+      ((and (zerop (spare-pieces (white-player game)))
+            (is-player-empty :white))
+       :white)
+      ((and (zerop (spare-pieces (black-player game)))
+            (is-player-empty :black))
+       :black))))
 
 (defun next-turn (game)
   (with-slots (last-roll turn) game
-    (setf turn (opponent game))
+    (setf turn (opponent-color (turn game)))
     (setf last-roll nil)))
 
 (defun random-roll (&optional (random-state *random-state*))
@@ -270,12 +244,12 @@ played in the original game. Store the sum in the game."
   (with-slots (last-roll turn) game
     (let ((dest-index (+ index last-roll)))
       (if (= index 0)
-          (decf (player-spare-pieces game))
+          (decf (spare-pieces (active-player game)))
           (setf (player-tile game index) :none))
 
       (when (<= dest-index +path-length+)
-        (when (eq (player-tile game dest-index) (opponent game))
-          (incf (opponent-spare-pieces game)))
+        (when (eq (player-tile game dest-index) (opponent-color (turn game)))
+          (incf (spare-pieces (opponent-player game))))
         (setf (player-tile game dest-index) turn))
       dest-index)))
 

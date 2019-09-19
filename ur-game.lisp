@@ -150,7 +150,7 @@
       ((string-equal operand "forfeit")
        (broadcast-message* session :op :forfeit
                            :player (color client))
-       (stop-game session (opponent-player (color client))))
+       (stop-game session (opponent-color (color client))))
       ((not (eq (color client) (turn (game session))))
        (send-message* client :op :err
                       :reason :not-your-turn))
@@ -237,6 +237,6 @@
 
 (defun set-deathmatch (session-token)
   "Given a session token, set the spare pieces of both players to 1. For debug purposes"
-  (with-slots (white-spare-pieces black-spare-pieces) (game (find-session session-token))
-    (setf white-spare-pieces 1)
-    (setf black-spare-pieces 1)))
+  (let ((game (game (find-session session-token))))
+    (setf (spare-pieces (white-player game)) 1)
+    (setf (spare-pieces (black-player game)) 1)))

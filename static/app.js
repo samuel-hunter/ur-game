@@ -156,29 +156,26 @@ function updateGameState(game) {
 
   lastRoll = game.lastRoll
 
-  for (let i = 0; i < 4; i++) {
-    if (game.blackStart[i] === 'black')
-      addPiece('black', i+1)
+  for (let player of ['black', 'white']) {
+    for (let i = 0; i < 4; i++) {
+      if (game[player].startPath[i] === player) {
+        addPiece(player, i+1)
+      }
+    }
 
-    if (game.whiteStart[i] === 'white')
-      addPiece('white', i+1)
+    for (let i = 0; i < 2; i++) {
+      if (game[player].endPath[i] === player) {
+        addPiece(player, i+13)
+      }
+    }
+
+    setSparePieces(player, game[player].sparePieces)
   }
 
   for (let i = 0; i < 8; i++) {
     if (game.sharedPath[i] !== 'none')
       addPiece(game.sharedPath[i], i+5)
   }
-
-  for (let i = 0; i < 2; i++) {
-    if (game.blackEnd[i] === 'black')
-      addPiece('black', i+13)
-
-    if (game.whiteEnd[i] === 'white')
-      addPiece('white', i+13)
-  }
-
-  setSparePieces('white', game.whiteSparePieces)
-  setSparePieces('black', game.blackSparePieces)
 
   for (let gameButton of document.getElementsByClassName('game-button')) {
     gameButton.disabled = false
