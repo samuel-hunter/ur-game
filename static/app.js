@@ -7,8 +7,7 @@ let webSocket
 
 const socketCodeOpponentDisconnected = 4000
 
-// Convert `white' or `black' to `you' or `opponent'.
-function toPlayer(color) {
+function colorToPlayer(color) {
   return (playerColor === color) ? 'you' : 'opponent'
 }
 
@@ -16,10 +15,11 @@ function getTile(color, position) {
   if (position > 4 && position < 13) {
     return document.getElementById('shared-' + position)
   } else {
-    return document.getElementById(toPlayer(color) + '-' + position)
+    return document.getElementById(colorToPlayer(color) + '-' + position)
   }
 }
 
+// Return whether your piece can be moved to the destination.
 function isValidDestination(position) {
   if (position < 1 || position > 15) return false
   if (position === 15) return true
@@ -51,13 +51,9 @@ function updateTooltip(message) {
   tooltip.insertAdjacentText('beforeend', message)
 }
 
-function removePiece(tile) {
-  tile.innerHTML = ''
-}
-
 function clearBoard() {
   for (let tile of document.getElementsByClassName('tile')) {
-    removePiece(tile)
+    tile.innerHTML = ''
   }
 }
 
@@ -94,7 +90,7 @@ function unhighlightSelected() {
 
 function createPiece(color, position) {
   let piece = document.createElement('span')
-  let player = toPlayer(color)
+  let player = colorToPlayer(color)
 
   if (player === 'you') {
     piece.onmouseenter = highlightDestination
@@ -108,14 +104,17 @@ function createPiece(color, position) {
   return piece
 }
 
+// Add a piece to the board
 function addPiece(color, position) {
   let tile = getTile(color, position)
   let piece = createPiece(color, position)
   tile.appendChild(piece)
 }
 
+
+// Display the spare pieces on the appropriate side of the game board.
 function setSparePieces(color, amnt) {
-  let player = toPlayer(color)
+  let player = colorToPlayer(color)
   let piecePool = document.getElementById(player + '-pool')
   piecePool.innerHTML = ''
   for (var i = 0; i < amnt; i++) {
@@ -124,67 +123,8 @@ function setSparePieces(color, amnt) {
   }
 }
 
-function movePiece() {
-  if (lastRoll === null) return
-  if (turn !== playerColor) return
-
-  let position = parseInt(this.getAttribute('data-position'))
-  if (!isValidDestination(position + lastRoll)) return
-
-  sendMessage({op: 'move', position: position})
-  unhighlightSelected()
-}
-
-function setTurn(color) {
-  turn = color
-  updateTooltip()
-
-  if (turn === playerColor) {
-    logActivity('game', "It is your turn")
-  } else {
-    logActivity('game', "It is your opponent's turn")
-  }
-
-  // Enable the roll button whenever it's your turn and you haven't rolled yet
-  document.getElementById('roll-button').disabled = lastRoll || (turn !== playerColor)
-}
-
-function updateGameState(game) {
-  document.getElementById('post-game-options').classList.add('hidden')
-  console.log({action: 'updateGameState', game: game})
-  clearBoard()
-
-  lastRoll = game.lastRoll
-
-  for (let player of ['black', 'white']) {
-    for (let i = 0; i < 4; i++) {
-      if (game[player].startPath[i] === player) {
-        addPiece(player, i+1)
-      }
-    }
-
-    for (let i = 0; i < 2; i++) {
-      if (game[player].endPath[i] === player) {
-        addPiece(player, i+13)
-      }
-    }
-
-    setSparePieces(player, game[player].sparePieces)
-  }
-
-  for (let i = 0; i < 8; i++) {
-    if (game.sharedPath[i] !== 'none')
-      addPiece(game.sharedPath[i], i+5)
-  }
-
-  for (let gameButton of document.getElementsByClassName('game-button')) {
-    gameButton.disabled = false
-  }
-
-  setTurn(game.turn, game.lastRoll)
-}
-
-function addMessage(source, message) {
+// append a message to the client's message box
+function addTextMessage(source, message) {
   let messages = document.getElementById('messages')
   let messageElem = document.createElement('p')
   let sourceElem = document.createElement('strong')
@@ -206,12 +146,83 @@ function logActivity(source, message) {
   if (source === 'game') source += ':'
   source = source.charAt(0).toUpperCase() + source.slice(1)
 
-  addMessage(source, message + '.')
+  addTextMessage(source, message + '.')
 }
 
 function showComment(player, message) {
   player = player.charAt(0).toUpperCase() + player.slice(1)
-  addMessage(player + ':', message)
+  addTextMessage(player + ':', message)
+}
+
+function setTurn(color) {
+  turn = color
+  updateTooltip()
+
+  if (turn === playerColor) {
+    logActivity('game', "It is your turn")
+  } else {
+    logActivity('game', "It is your opponent's turn")
+  }
+
+  // Enable the roll button whenever it's your turn and you haven't rolled yet
+  document.getElementById('roll-button').disabled = lastRoll || (turn !== playerColor)
+}
+
+function updateGameState(game) {
+  document.getElementById('post-game-options').classList.add('hidden')
+  console.log({action: 'updateGameState', game: game})
+
+  lastRoll = game.lastRoll
+
+  // Repopulate the board with pieces
+  clearBoard()
+  for (let player of ['black', 'white']) {
+    for (let i = 0; i < 4; i++) {
+      if (game[player].startPath[i] === player) {
+        addPiece(player, i+1)
+      }
+    }
+
+    for (let i = 0; i < 2; i++) {
+      if (game[player].endPath[i] === player) {
+        addPiece(player, i+13)
+      }
+    }
+
+    setSparePieces(player, game[player].sparePieces)
+  }
+
+  for (let i = 0; i < 8; i++) {
+    if (game.sharedPath[i] !== 'none')
+      addPiece(game.sharedPath[i], i+5)
+  }
+
+  // Disable game actions
+  for (let gameButton of document.getElementsByClassName('game-button')) {
+    gameButton.disabled = false
+  }
+
+  setTurn(game.turn, game.lastRoll)
+}
+
+// Send a message to the game server
+function sendGameMessage(data) {
+  // Heartbeat messages are annoying; don't print them out
+  if (data.op !== 'heartbeat') {
+    console.log({message: 'sending', data: data})
+  }
+  webSocket.send(JSON.stringify(data))
+}
+
+function movePiece() {
+  if (lastRoll === null) return
+  if (turn !== playerColor) return
+
+  let position = parseInt(this.getAttribute('data-position'))
+  if (!isValidDestination(position + lastRoll)) return
+
+  sendGameMessage({op: 'move', position: position})
+  unhighlightSelected()
 }
 
 function sendComment() {
@@ -220,7 +231,7 @@ function sendComment() {
 
   // Comment only when meaningful text is included
   if (comment !== '') {
-    sendMessage({op: 'message', message: comment})
+    sendGameMessage({op: 'message', message: comment})
   }
 
   commentElem.value = ''
@@ -265,15 +276,15 @@ function setDice(points) {
 // Roll the dice. Called by #roll-button
 function roll() {
   document.getElementById('roll-button').disabled = true
-  sendMessage({op: 'roll'})
+  sendGameMessage({op: 'roll'})
 }
 
 function offerDraw() {
-  sendMessage({op: 'draw'})
+  sendGameMessage({op: 'draw'})
 }
 
 function forfeit() {
-  sendMessage({op: 'forfeit'})
+  sendGameMessage({op: 'forfeit'})
 }
 
 // Roll, offer draw, or forfeit when its respective keys are
@@ -290,15 +301,6 @@ document.body.addEventListener('keypress', function (event) {
   if (event.key === 'f') forfeit()
 
 })
-
-
-function sendMessage(data) {
-  // Heartbeat messages are annoying; don't print them out
-  if (data.op !== 'heartbeat') {
-    console.log({message: 'sending', data: data})
-  }
-  webSocket.send(JSON.stringify(data))
-}
 
 function showInvite(token) {
   let inviteLink = document.getElementById('invite-link')
@@ -343,7 +345,7 @@ function gameOver(reason) {
 }
 
 function rematch() {
-  sendMessage({op: 'rematch'})
+  sendGameMessage({op: 'rematch'})
 }
 
 function rollDice(total, flips, skipTurn, reason) {
@@ -361,7 +363,7 @@ function rollDice(total, flips, skipTurn, reason) {
     message += ', and with no valid moves, skipped a turn'
     break
   }
-  logActivity(toPlayer(turn), message)
+  logActivity(colorToPlayer(turn), message)
 
   if (skipTurn) {
     if (turn === 'white') {
@@ -386,6 +388,11 @@ function getMoveMessage(moveType) {
   case 'capturedPiece':
     return 'captured an enemy piece'
     break
+  default:
+    // Something went wrong here, but it's not the end of the world.
+    console.warn(`Unexpected moveType: ${moveType}`)
+
+    return `performed an unexpected move (${moveType})`
   }
 }
 
@@ -442,13 +449,13 @@ function connect(token) {
       break
     case 'move':
       if (data.successful) {
-        logActivity(toPlayer(turn), getMoveMessage(data.moveType))
+        logActivity(colorToPlayer(turn), getMoveMessage(data.moveType))
       } else {
         logActivity('game', "Can't move: " + data.reason)
       }
       break
     case 'message':
-      showComment(toPlayer(data.color), data.message)
+      showComment(colorToPlayer(data.color), data.message)
       break
     case 'gameOver':
       if (data.winner === null) {
@@ -475,7 +482,7 @@ function connect(token) {
   }
 
   webSocket.onopen = function (event) {
-    window.setInterval(() => sendMessage({op: 'heartbeat'}), 10000)
+    window.setInterval(() => sendGameMessage({op: 'heartbeat'}), 10000)
   }
 
   webSocket.onclose = function (event) {
