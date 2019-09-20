@@ -177,7 +177,9 @@ var view = {};
 
   view.updateGameState = function updateGameState(newGameState, onclick) {
     model.gameState = newGameState
-    document.getElementById('post-game-options').classList.add('hidden')
+    for (let b of document.getElementsByClassName('post-game')) {
+      b.classList.add('hidden')
+    }
 
     view.updateTurn()
     updateBoard(onclick)

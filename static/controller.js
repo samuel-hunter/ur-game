@@ -88,15 +88,18 @@ function copyInvite() {
 function gameOver(reason) {
   view.logActivity('game', 'Game over: ' + reason)
 
-  let postGameOptions = document.getElementById('post-game-options')
-  let disconnectedOptions = document.getElementById('disconnected-options')
+  let hide = (e) => e.classList.add('hidden')
+  let show = (e) => e.classList.remove('hidden')
+
+  let postGameOptions = document.getElementsByClassName('post-game')
+  let disconnectedOptions = document.getElementsByClassName('post-session')
 
   if (webSocket.readyState === WebSocket.OPEN) {
-    postGameOptions.classList.remove('hidden')
-    disconnectedOptions.classList.add('hidden')
+    for (let b of postGameOptions) show(b)
+    for (let b of disconnectedOptions) hide(b)
   } else {
-    disconnectedOptions.classList.remove('hidden')
-    postGameOptions.classList.add('hidden')
+    for (let b of postGameOptions) hide(b)
+    for (let b of disconnectedOptions) show(b)
   }
 
   for (let gameButton of document.getElementsByClassName('game-button')) {
@@ -160,8 +163,10 @@ function connect(token) {
   // Clear message box
   document.getElementById('messages').innerHTML = ''
 
-  // Hide relevant button group
-  document.getElementById('disconnected-options').classList.add('hidden')
+  // Hide relevant buttons
+  for (let b of document.getElementsByClassName('post-session')) {
+    b.classList.add('hidden')
+  }
 
   let socketUrl
   if (window.location.protocol === 'https:') {
