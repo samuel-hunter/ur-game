@@ -9,6 +9,7 @@
 
            :opponent-color
            :game
+           :turn
 
            :white-player
            :black-player
