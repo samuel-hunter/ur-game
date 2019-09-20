@@ -322,13 +322,15 @@ document.body.addEventListener('keypress', function (event) {
   // Block when typing in chat.
   if (document.activeElement.tagName === 'INPUT') return
 
+  // Block when game is not in action
+  if (gameState.turn === null) return
+
   // Block when the roll button is disabled.
   if (event.key === 'r' &&
       !document.getElementById('roll-button').disabled) roll()
 
   if (event.key === 'd') offerDraw()
   if (event.key === 'f') forfeit()
-
 })
 
 function showInvite(token) {
