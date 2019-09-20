@@ -71,9 +71,7 @@ function updateTooltip(message) {
     }
   }
 
-  let tooltip = document.getElementById('tooltip')
-  tooltip.innerHTML = ''
-  tooltip.insertAdjacentText('beforeend', message)
+  document.getElementById('tooltip').textContnet = message
 }
 
 function clearBoard() {
@@ -151,7 +149,7 @@ function addTextMessage(source, message) {
   let messageElem = document.createElement('p')
   let sourceElem = document.createElement('strong')
 
-  sourceElem.insertAdjacentText('beforeend', source)
+  sourceElem.textContent = source
   messageElem.appendChild(sourceElem)
   messageElem.insertAdjacentText('beforeend', ' ' + message)
 
