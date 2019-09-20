@@ -1,17 +1,43 @@
 /* global WebSocket */
 
-let playerColor = 'white'
-let turn = null
-let lastRoll = null
-let webSocket
-
 const socketCodeOpponentDisconnected = 4000
+const rosettes = [4, 8, 14]
+
+let webSocket
+let playerColor
+let gameState = {
+  turn: null,
+  lastRoll: null
+}
+
+// Return the type of tile
+function tileType(position) {
+  if (rosettes.indexOf(position) >= 0) {
+    return 'rosette'
+  } else {
+    return 'normal'
+  }
+}
 
 function colorToPlayer(color) {
   return (playerColor === color) ? 'you' : 'opponent'
 }
 
-function getTile(color, position) {
+function opponentColor(color) {
+  return (color === 'black') ? 'white' : 'black'
+}
+
+function getTileOwner(color, position) {
+  if (position <= 4) {
+    return gameState[color].startPath[position - 1]
+  } else if (position <= 12) {
+    return gameState.sharedPath[position - 5]
+  } else {
+    return gameState[color].endPath[position - 13]
+  }
+}
+
+function getTileElement(color, position) {
   if (position > 4 && position < 13) {
     return document.getElementById('shared-' + position)
   } else {
@@ -23,26 +49,25 @@ function getTile(color, position) {
 function isValidDestination(position) {
   if (position < 1 || position > 15) return false
   if (position === 15) return true
-  let tile = getTile(playerColor, position)
-  if (tile.children.length === 0) return true
+  let tile = getTileOwner(playerColor, position)
+  if (tile === 'none') return true
 
-  let piece = tile.children[0]
-  if (piece.getAttribute('data-player') === 'you') return false
-  if (tile.classList.contains('rosette')) return false
+  if (tile === playerColor) return false
+  if (tileType(position) === 'rosette') return false
   return true
 }
 
 function updateTooltip(message) {
   // Set the default message if a custom message isn't given.
   if (message === undefined) {
-    if (turn === null) {
+    if (gameState.turn === null) {
       message = 'Game over'
-    } else if (turn !== playerColor) {
+    } else if (gameState.turn !== playerColor) {
       message = "It is your opponent's turn"
-    } else if (lastRoll === null) {
+    } else if (gameState.lastRoll === null) {
       message = "It is your turn"
     } else {
-      message = `You rolled a ${lastRoll}`
+      message = `You rolled a ${gameState.lastRoll}`
     }
   }
 
@@ -58,12 +83,12 @@ function clearBoard() {
 }
 
 function highlightDestination() {
-  if (lastRoll === null) return
+  if (gameState.lastRoll === null) return
 
   let position = parseInt(this.getAttribute('data-position'))
-  let destination = position + lastRoll
+  let destination = position + gameState.lastRoll
 
-  var tile = getTile(playerColor, destination)
+  var tile = getTileElement(playerColor, destination)
 
   if (tile) {
     tile.classList.add('selected')
@@ -106,11 +131,8 @@ function createPiece(color, position) {
 
 // Add a piece to the board
 function addPiece(color, position) {
-  let tile = getTile(color, position)
-  let piece = createPiece(color, position)
-  tile.appendChild(piece)
+  getTileElement(color, position).appendChild(createPiece(color, position))
 }
-
 
 // Display the spare pieces on the appropriate side of the game board.
 function setSparePieces(color, amnt) {
@@ -154,55 +176,62 @@ function showComment(player, message) {
   addTextMessage(player + ':', message)
 }
 
-function setTurn(color) {
-  turn = color
+function updateTurn(newTurn) {
+  if (newTurn !== undefined) {
+    gameState.turn = newTurn
+  }
   updateTooltip()
 
-  if (turn === playerColor) {
-    logActivity('game', "It is your turn")
+  if (gameState.turn === playerColor) {
+    logActivity('game', 'It is your turn')
   } else {
     logActivity('game', "It is your opponent's turn")
   }
 
   // Enable the roll button whenever it's your turn and you haven't rolled yet
-  document.getElementById('roll-button').disabled = lastRoll || (turn !== playerColor)
+  document.getElementById('roll-button').disabled = !(gameState.lastRoll === null &&
+                                                      gameState.turn == playerColor)
 }
 
-function updateGameState(game) {
-  document.getElementById('post-game-options').classList.add('hidden')
-  console.log({action: 'updateGameState', game: game})
-
-  lastRoll = game.lastRoll
-
-  // Repopulate the board with pieces
+// Repopulare the board with the appropriate pieces
+function updateBoard() {
   clearBoard()
-  for (let player of ['black', 'white']) {
+  for (let color of ['black', 'white']) {
+    // Populate player's starting path
     for (let i = 0; i < 4; i++) {
-      if (game[player].startPath[i] === player) {
-        addPiece(player, i+1)
-      }
+      if (gameState[color].startPath[i] === color)
+        addPiece(color, i+1)
     }
 
+    // Populate player's ending path
     for (let i = 0; i < 2; i++) {
-      if (game[player].endPath[i] === player) {
-        addPiece(player, i+13)
-      }
+      if (gameState[color].endPath[i] === color)
+        addPiece(color, i+13)
     }
 
-    setSparePieces(player, game[player].sparePieces)
+    // Populate the player's spare pieces
+    setSparePieces(color, gameState[color].sparePieces)
   }
 
+  // Populare the game board's shared path
   for (let i = 0; i < 8; i++) {
-    if (game.sharedPath[i] !== 'none')
-      addPiece(game.sharedPath[i], i+5)
+    if (gameState.sharedPath[i] !== 'none')
+      addPiece(gameState.sharedPath[i], i+5)
   }
 
-  // Disable game actions
+}
+
+function updateGameState(newGameState) {
+  gameState = newGameState
+  document.getElementById('post-game-options').classList.add('hidden')
+
+  updateTurn()
+  updateBoard()
+
+  // Enable game actions
   for (let gameButton of document.getElementsByClassName('game-button')) {
     gameButton.disabled = false
   }
-
-  setTurn(game.turn, game.lastRoll)
 }
 
 // Send a message to the game server
@@ -215,11 +244,11 @@ function sendGameMessage(data) {
 }
 
 function movePiece() {
-  if (lastRoll === null) return
-  if (turn !== playerColor) return
+  if (gameState.lastRoll === null) return
+  if (gameState.turn !== playerColor) return
 
   let position = parseInt(this.getAttribute('data-position'))
-  if (!isValidDestination(position + lastRoll)) return
+  if (!isValidDestination(position + gameState.lastRoll)) return
 
   sendGameMessage({op: 'move', position: position})
   unhighlightSelected()
@@ -339,8 +368,9 @@ function gameOver(reason) {
     gameButton.disabled = true
   }
   document.getElementById('roll-button').disabled = true
-  turn = null
-  lastRoll = null
+
+  gameState.turn = null
+  gameState.lastRoll = null
   updateTooltip()
 }
 
@@ -349,8 +379,8 @@ function rematch() {
 }
 
 function rollDice(total, flips, skipTurn, reason) {
-  if (turn === playerColor) {
-    lastRoll = total
+  if (gameState.turn === playerColor) {
+    gameState.lastRoll = total
     setDice(flips)
   }
 
@@ -363,15 +393,10 @@ function rollDice(total, flips, skipTurn, reason) {
     message += ', and with no valid moves, skipped a turn'
     break
   }
-  logActivity(colorToPlayer(turn), message)
+  logActivity(colorToPlayer(gameState.turn), message)
 
-  if (skipTurn) {
-    if (turn === 'white') {
-      setTurn('black')
-    } else {
-      setTurn('white')
-    }
-  }
+  if (skipTurn)
+    updateTurn(opponentColor(gameState.turn))
 }
 
 function getMoveMessage(moveType) {
@@ -449,7 +474,7 @@ function connect(token) {
       break
     case 'move':
       if (data.successful) {
-        logActivity(colorToPlayer(turn), getMoveMessage(data.moveType))
+        logActivity(colorToPlayer(gameState.turn), getMoveMessage(data.moveType))
       } else {
         logActivity('game', "Can't move: " + data.reason)
       }
