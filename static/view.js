@@ -1,4 +1,4 @@
-/* global model */
+/* global model, setTimeout, Notification */
 
 // Explicit semicolon so that JS doesn't mistake the parens as calling the object.
 var view = {};
@@ -53,6 +53,7 @@ var view = {};
     }
   }
 
+  let pageTitle = document.title
   function unhighlightSelected() {
     view.updateTooltip()
 
@@ -82,6 +83,12 @@ var view = {};
 
     // Scroll down to see the latest comment
     messages.scrollTop = messages.scrollHeight
+
+    // Alert the user with a change in the title.
+    if (document.hidden) {
+      document.title = '! ' + pageTitle
+      setTimeout(function () { document.title = pageTitle }, 500)
+    }
   }
 
   view.logActivity = function logActivity(source, message) {
