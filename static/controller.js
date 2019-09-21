@@ -129,7 +129,7 @@ let controller = {};
         message = 'connection died'
       }
 
-      view.gameOver(message, false)
+      view.endGame(message, false)
     }
 
     webSocket.onerror = function (error) {
@@ -143,7 +143,7 @@ let controller = {};
         console.error(error)
         let message = 'socket error'
         if (error.message) message += ': ' + error.message
-        view.gameOver(message, false)
+        view.endGame(message, false)
       }
     }
   }
@@ -182,8 +182,6 @@ let controller = {};
       if (event.key === 'd') controller.offerDraw()
       if (event.key === 'f') controller.forfeit()
     })
-
-    view.setDice([0, 0, 0, 0])
   }
 
   if (document.readyState != 'loading') {

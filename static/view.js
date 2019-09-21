@@ -4,14 +4,6 @@
 var view = {};
 
 (function () {
-  function getTileElement(color, position) {
-    if (position > 4 && position < 13) {
-      return document.getElementById('shared-' + position)
-    } else {
-      return document.getElementById(model.colorToPlayer(color) + '-' + position)
-    }
-  }
-
   function updateTooltip(message) {
     // Set the default message if a custom message isn't given.
     if (message === undefined) {
@@ -29,43 +21,21 @@ var view = {};
     document.getElementById('tooltip').textContent = message
   }
 
+  function getTileElement(color, position) {
+    if (position > 4 && position < 13) {
+      return document.getElementById('shared-' + position)
+    } else {
+      return document.getElementById(model.colorToPlayer(color) + '-' + position)
+    }
+  }
+
   function clearBoard() {
     for (let tile of document.getElementsByClassName('tile')) {
       tile.innerHTML = ''
     }
   }
 
-  function highlightDestination() {
-    if (model.gameState.lastRoll === null) return
-
-    let position = parseInt(this.getAttribute('data-position'))
-    let destination = position + model.gameState.lastRoll
-
-    var tile = getTileElement(model.playerColor, destination)
-
-    if (tile) {
-      tile.classList.add('selected')
-    }
-
-    if (!model.isValidDestination(destination)) {
-      updateTooltip("You can't move there")
-      this.classList.add('invalid-move')
-    }
-  }
-
   let pageTitle = document.title
-  function unhighlightSelected() {
-    updateTooltip()
-
-    for (let elem of document.getElementsByClassName('selected')) {
-      elem.classList.remove('selected')
-    }
-
-    for (let elem of document.getElementsByClassName('invalid-move')) {
-      elem.classList.remove('invalid-move')
-    }
-  }
-
   // append a message to the client's message box
   function addTextMessage(source, message) {
     let messages = document.getElementById('messages')
@@ -115,6 +85,36 @@ var view = {};
     // Enable the roll button whenever it's your turn and you haven't rolled yet
     document.getElementById('roll-button').disabled = !(model.gameState.lastRoll === null &&
                                                         model.gameState.turn == model.playerColor)
+  }
+
+  function highlightDestination() {
+    if (model.gameState.lastRoll === null) return
+
+    let position = parseInt(this.getAttribute('data-position'))
+    let destination = position + model.gameState.lastRoll
+
+    var tile = getTileElement(model.playerColor, destination)
+
+    if (tile) {
+      tile.classList.add('selected')
+    }
+
+    if (!model.isValidDestination(destination)) {
+      updateTooltip("You can't move there")
+      this.classList.add('invalid-move')
+    }
+  }
+
+  function unhighlightSelected() {
+    updateTooltip()
+
+    for (let elem of document.getElementsByClassName('selected')) {
+      elem.classList.remove('selected')
+    }
+
+    for (let elem of document.getElementsByClassName('invalid-move')) {
+      elem.classList.remove('invalid-move')
+    }
   }
 
   function createPiece(color, position) {
@@ -192,7 +192,7 @@ var view = {};
   }
 
   // Clear and repopulate the dice pool with a list of dice results
-  view.setDice = function setDice(points) {
+  function setDice(points) {
     let dicePool = document.getElementById('dice-pool')
     dicePool.innerHTML = ''
 
@@ -243,7 +243,7 @@ var view = {};
     document.execCommand('copy')
   }
 
-  view.gameOver = function gameOver(reason, sessionActive) {
+  view.endGame = function endGame(reason, sessionActive) {
     view.logActivity('game', 'Game over: ' + reason)
 
     let hide = (e) => e.classList.add('hidden')
@@ -292,7 +292,9 @@ var view = {};
     }
   }
 
-  function rollDice(total, flips, skipTurn, reason) {
+  function showDice(total, flips, skipTurn, reason) {
+    setDice(flips)
+
     let message = 'rolled a ' + total
     switch (skipTurn) {
     case 'flippedNothing':
@@ -324,12 +326,14 @@ var view = {};
       break
     case 'roll':
       if (data.successful) {
-        rollDice(data.total, data.flips, data.skipTurn, data.reason)
+        if (model.gameState.turn === model.playerColor)
+          showDice(data.total, data.flips, data.skipTurn, data.reason)
 
         // TODO: Figure out how to cleanly migrate this to controller.js
         if (data.skipTurn) {
-          updateTurn()
           model.gameState.turn = model.opponentColor(model.gameState.turn)
+          model.gameState.lastRoll = null
+          updateTurn()
         }
       } else {
         view.logActivity('game', "Can't roll: " + data.reason)
@@ -347,11 +351,11 @@ var view = {};
       break
     case 'gameOver':
       if (data.winner === null) {
-        view.gameOver("it's a tie", true)
+        view.endGame("it's a tie", true)
       } else if (data.winner === model.playerColor) {
-        view.gameOver('you win', true)
+        view.endGame('you win', true)
       } else {
-        view.gameOver('opponent wins', true)
+        view.endGame('opponent wins', true)
       }
       break
     case 'tie':
@@ -367,5 +371,15 @@ var view = {};
       view.logActivity('game', 'Unhandled op ' + data.op)
       break
     }
+  }
+
+  function start() {
+    setDice([0, 0, 0, 0])
+  }
+
+  if (document.readyState != 'loading') {
+    start()
+  } else {
+    document.addEventListener('DOMContentLoaded', start)
   }
 })()
