@@ -91,8 +91,9 @@ let controller = {};
 
       // Handle operands which change the game's state.
       switch (data.op) {
-      case 'welcome':
+      case 'gameStart':
         model.playerColor = data.color
+        model.gameState = data.game
         break
       case 'gameState':
         model.gameState = data.game

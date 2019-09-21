@@ -96,9 +96,9 @@
        :do (progn
              (setf (offered-draw client) nil)
              (send-message* client
-                            :op :welcome
-                            :color (color client))))
-    (send-game-state session)))
+                            :op :game-start
+                            :color (color client)
+                            :game (game session))))))
 
 (defmethod hunchensocket:client-connected ((session game-session) client)
   (ecase (status session)

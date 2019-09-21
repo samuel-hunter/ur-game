@@ -314,10 +314,11 @@ var view = {};
       view.showInvite(window.location.protocol + '//' +
                       window.location.host + '/join/' + data.token)
       break
-    case 'welcome':
+    case 'gameStart':
       view.hideInvite()
-      model.playerColor = data.color
       view.logActivity('game', 'Welcome. You are playing ' + model.playerColor)
+
+      updateGameState()
       break
     case 'gameState':
       updateGameState()
