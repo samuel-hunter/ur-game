@@ -173,11 +173,6 @@ var view = {};
 
   }
 
-  function updateGameState() {
-    updateTurn()
-    updateBoard()
-  }
-
   // Clear and repopulate the dice pool with a list of dice results
   function setDice(points) {
     let dicePool = document.getElementById('dice-pool')
@@ -308,10 +303,12 @@ var view = {};
       view.hideInvite()
       view.logActivity('game', 'Welcome. You are playing ' + model.playerColor)
 
-      updateGameState()
+      updateTurn()
+      updateBoard()
       break
     case 'gameState':
-      updateGameState()
+      updateTurn()
+      updateBoard()
       break
     case 'ack':
       break
@@ -349,6 +346,8 @@ var view = {};
       } else {
         view.endGame('opponent wins', true)
       }
+
+      updateBoard()
       break
     case 'tie':
       view.logActivity(data.player, 'offers a tie')

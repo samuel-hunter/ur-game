@@ -96,16 +96,16 @@ let controller = {};
         model.gameState = data.game
         break
       case 'gameState':
+      case 'gameOver':
         model.gameState = data.game
         break
-      case 'gameOver':
-        model.setEndGame()
       case 'roll':
         if (data.successful) model.gameState.lastRoll = data.total
         break
       }
 
       model.updateStateArray()
+      if (data.op === 'gameOver') model.setEndGame()
 
       // Defer the operand to the view.
       view.handleGameMessage(data)
@@ -134,6 +134,7 @@ let controller = {};
         message = 'connection died'
       }
 
+      model.setDisconnected()
       view.endGame(message, false)
     }
 
@@ -148,6 +149,8 @@ let controller = {};
         console.error(error)
         let message = 'socket error'
         if (error.message) message += ': ' + error.message
+
+        model.setDisconnected()
         view.endGame(message, false)
       }
     }

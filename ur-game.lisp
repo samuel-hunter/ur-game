@@ -4,6 +4,7 @@
   (:import-from :alexandria
                 :switch
                 :when-let
+                :if-let
                 :whichever)
   (:import-from :json
                 :encode-json-plist-to-string
@@ -120,7 +121,8 @@
   (setf (status session) :game-over)
   (broadcast-message* session
                       :op :game-over
-                      :winner winner))
+                      :winner winner
+                      :game (game session)))
 
 (defmethod hunchensocket:text-message-received ((session game-session) client message)
   (let* ((message (decode-json-from-string message))
@@ -159,16 +161,16 @@
 
            (if (action-successful result)
                (progn
+                 ;; A move is made; reset all draw offerings.
                  (loop :for c :in (hunchensocket:clients session)
                     :do (setf (offered-draw c) nil))
 
                  (broadcast-message session result)
-                 (when (getf result :turn-end)
-                   (send-game-state session)))
-               (send-message client result))
-
-           (when-let (winner (winner game))
-             (stop-game session winner)))))))
+                 (if-let (winner (winner game))
+                   (stop-game session winner)
+                   (when (getf result :turn-end)
+                     (send-game-state session))))
+               (send-message client result)))))))
 
 (defun new-game-dispatcher (request)
   (when (string= (hunchentoot:script-name request) "/new")
@@ -237,6 +239,8 @@
 
 (defun set-deathmatch (session-token)
   "Given a session token, set the spare pieces of both players to 1. For debug purposes"
-  (let ((game (game (find-session session-token))))
+  (let* ((session (find-session session-token))
+         (game (game session)))
     (setf (spare-pieces (white-player game)) 1)
-    (setf (spare-pieces (black-player game)) 1)))
+    (setf (spare-pieces (black-player game)) 1)
+    (send-game-state session)))
