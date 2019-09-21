@@ -47,9 +47,13 @@
     <div id="game-container">
       <main id="game-set">
         <div id="game-session-actions">
-          <button id="rematch-button" class="post-game hidden"
+          <button id="rematch-button" class="game-button hidden"
+                  data-button="hidden"
+                  data-state="connected no-game"
                   onclick="controller.rematch()">Rematch</button>
-          <button id="reconnect-button" class="post-session hidden"
+          <button id="reconnect-button" class="game-button hidden"
+                  data-button="hidden"
+                  data-state="disconnected"
                   onclick="controller.connect()">New Session</button>
         </div>
         <p id="tooltip">Waiting for a friend to join</p>
@@ -96,13 +100,22 @@
         <div id="dice-pool">
         </div>
         <button id="roll-button" class="game-button"
+                data-button="true"
+                data-state="your-turn roll-phase"
+                data-keybind="r"
                 onclick="controller.roll()" disabled>(R)oll</button>
         <button onclick="document.getElementById('roll-button').disabled=false">
           Roll button stuck?
         </button>
         <button id="draw-button" class="game-button"
+                data-button="true"
+                data-state="active-game"
+                data-keybind="d"
                 onclick="controller.offerDraw()" disabled>(D)raw</button>
         <button id="forfeit-button" class="game-button"
+                data-button="true"
+                data-state="active-game"
+                data-keybind="f"
                 onclick="controller.forfeit()" disabled>(F)orfeit</button>
 
         <svg id="die-template" class="hidden" viewBox="-2 -2 102 90">

@@ -4,14 +4,16 @@
 var view = {};
 
 (function () {
+  let keybinds = {}
+
   function updateTooltip(message) {
     // Set the default message if a custom message isn't given.
     if (message === undefined) {
-      if (model.gameState.turn === null) {
+      if (model.hasState('no-game')) {
         message = 'Game over'
-      } else if (model.gameState.turn !== model.playerColor) {
+      } else if (model.hasState('opponent-turn')) {
         message = "It is your opponent's turn"
-      } else if (model.gameState.lastRoll === null) {
+      } else if (model.hasState('roll-phase')) {
         message = "It is your turn"
       } else {
         message = `You rolled a ${model.gameState.lastRoll}`
@@ -74,21 +76,15 @@ var view = {};
   }
 
   function updateTurn() {
-    updateTooltip()
-
-    if (model.gameState.turn === model.playerColor) {
+    if (model.hasState('your-turn')) {
       view.logActivity('game', 'It is your turn')
     } else {
       view.logActivity('game', "It is your opponent's turn")
     }
-
-    // Enable the roll button whenever it's your turn and you haven't rolled yet
-    document.getElementById('roll-button').disabled = !(model.gameState.lastRoll === null &&
-                                                        model.gameState.turn == model.playerColor)
   }
 
   function highlightDestination() {
-    if (model.gameState.lastRoll === null) return
+    if (!model.hasAllStates(['your-turn', 'move-phase'])) return
 
     let position = parseInt(this.getAttribute('data-position'))
     let destination = position + model.gameState.lastRoll
@@ -178,17 +174,8 @@ var view = {};
   }
 
   function updateGameState() {
-    for (let b of document.getElementsByClassName('post-game')) {
-      b.classList.add('hidden')
-    }
-
     updateTurn()
     updateBoard()
-
-    // Enable game actions
-    for (let gameButton of document.getElementsByClassName('game-button')) {
-      gameButton.disabled = false
-    }
   }
 
   // Clear and repopulate the dice pool with a list of dice results
@@ -245,29 +232,8 @@ var view = {};
 
   view.endGame = function endGame(reason, sessionActive) {
     view.logActivity('game', 'Game over: ' + reason)
-
-    let hide = (e) => e.classList.add('hidden')
-    let show = (e) => e.classList.remove('hidden')
-
-    let postGameOptions = document.getElementsByClassName('post-game')
-    let disconnectedOptions = document.getElementsByClassName('post-session')
-
-    if (sessionActive) {
-      for (let b of postGameOptions) show(b)
-      for (let b of disconnectedOptions) hide(b)
-    } else {
-      for (let b of postGameOptions) hide(b)
-      for (let b of disconnectedOptions) show(b)
-    }
-
-    for (let gameButton of document.getElementsByClassName('game-button')) {
-      gameButton.disabled = true
-    }
-    document.getElementById('roll-button').disabled = true
-
-    model.gameState.turn = null
-    model.gameState.lastRoll = null
     updateTooltip()
+    updateGameButtons()
   }
 
   function getMoveMessage(moveType) {
@@ -308,6 +274,30 @@ var view = {};
     view.logActivity(model.colorToPlayer(model.gameState.turn), message)
   }
 
+  function updateGameButtons() {
+    for (let button of document.getElementsByClassName('game-button')) {
+      let type = button.getAttribute('data-button')
+      let state = button.getAttribute('data-state').split(' ')
+      let statesFulfilled = model.hasAllStates(state)
+
+      switch (type) {
+      case 'true':
+        button.disabled = !statesFulfilled
+        break
+      case 'hidden':
+        if (statesFulfilled) {
+          button.classList.remove('hidden')
+        } else {
+          button.classList.add('hidden')
+        }
+        break
+      default:
+        console.error(`Unknown game button type '${type}'`)
+        break
+      }
+    }
+  }
+
   view.handleGameMessage = function(data) {
     switch (data.op) {
     case 'gameToken':
@@ -334,6 +324,7 @@ var view = {};
         if (data.skipTurn) {
           model.gameState.turn = model.opponentColor(model.gameState.turn)
           model.gameState.lastRoll = null
+          model.updateStateArray()
           updateTurn()
         }
       } else {
@@ -372,10 +363,41 @@ var view = {};
       view.logActivity('game', 'Unhandled op ' + data.op)
       break
     }
+
+    updateGameButtons()
+    updateTooltip()
   }
+
+  document.getElementById('comment').addEventListener('keyup', function (event) {
+    if (event.key === 'Enter') {
+      controller.sendComment()
+    }
+  })
 
   function start() {
     setDice([0, 0, 0, 0])
+
+    for (let button of document.getElementsByClassName('game-button')) {
+      let key = button.getAttribute('data-keybind')
+      let state = button.getAttribute('data-state').split(' ')
+      if (key === null) continue
+
+      keybinds[key] = {
+        state: state,
+        func: new Function(button.getAttribute('onclick'))
+      }
+    }
+
+    document.body.addEventListener('keypress', function (event) {
+      // Block when typing in chat
+      if (document.activeElement.tagName === 'INPUT') return
+
+      if (event.key in keybinds) {
+        let keybind = keybinds[event.key]
+
+        if (model.hasAllStates(keybind.state)) keybind.func()
+      }
+    })
   }
 
   if (document.readyState != 'loading') {

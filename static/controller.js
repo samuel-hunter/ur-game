@@ -98,10 +98,14 @@ let controller = {};
       case 'gameState':
         model.gameState = data.game
         break
+      case 'gameOver':
+        model.setEndGame()
       case 'roll':
         if (data.successful) model.gameState.lastRoll = data.total
         break
       }
+
+      model.updateStateArray()
 
       // Defer the operand to the view.
       view.handleGameMessage(data)
@@ -159,30 +163,6 @@ let controller = {};
     } else {
       controller.connect()
     }
-
-
-    document.getElementById('comment').addEventListener('keyup', function (event) {
-      if (event.key === 'Enter') {
-        controller.sendComment()
-      }
-    })
-
-    // Roll, offer draw, or forfeit when its respective keys are
-    // pressed
-    document.body.addEventListener('keypress', function (event) {
-      // Block when typing in chat.
-      if (document.activeElement.tagName === 'INPUT') return
-
-      // Block when game is not in action
-      if (model.gameState.turn === null) return
-
-      // Block when the roll button is disabled.
-      if (event.key === 'r' &&
-          !document.getElementById('roll-button').disabled) controller.roll()
-
-      if (event.key === 'd') controller.offerDraw()
-      if (event.key === 'f') controller.forfeit()
-    })
   }
 
   if (document.readyState != 'loading') {

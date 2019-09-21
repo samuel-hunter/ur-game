@@ -1,5 +1,6 @@
 var model = {
   playerColor: null,
+  stateArray: ['disconnected', 'no-game'],
   gameState: {
     turn: null,
     lastRoll: null
@@ -44,6 +45,53 @@ var model = {
 
     if (tile === model.playerColor) return false
     if (model.tileType(position) === 'rosette') return false
+    return true
+  }
+
+  model.setEndGame = function setEndGame() {
+    model.gameState.turn = null
+    model.gameState.lastRoll = null
+    model.stateArray = ['no-game', 'connected']
+  }
+
+  model.setDisconnected = function setDisconnected() {
+    model.gameState.turn = null
+    model.gameState.lastRoll = null
+    model.stateArray = ['disconnected', 'no-game']
+  }
+
+  model.updateStateArray = function updateStateArray() {
+    let stateArray = model.stateArray = ['connected']
+
+    if (model.gameState.turn === null) {
+      stateArray.push('no-game')
+    } else {
+      stateArray.push('active-game')
+      stateArray.push(model.gameState.turn + '-turn')
+
+      if (model.gameState.turn === model.playerColor) {
+        stateArray.push('your-turn')
+      } else {
+        stateArray.push('opponent-turn')
+      }
+
+      if (model.gameState.lastRoll === null) {
+        stateArray.push('roll-phase')
+      } else {
+        stateArray.push('move-phase')
+      }
+    }
+  }
+
+  model.hasState = function hasState(state) {
+    return model.stateArray.indexOf(state) >= 0
+  }
+
+  model.hasAllStates = function hasAllStates(states) {
+    for (let state of states) {
+      if (!model.hasState(state)) return false
+    }
+
     return true
   }
 })()
