@@ -16,6 +16,7 @@
     <meta property="og:image" content="/rosette.png">
     <meta property="og:image:width" content="300">
     <meta property="og:image:height" content="300">
+
     <link rel="stylesheet" href="app.css">
     <link rel="icon" href="rosette.png">
 
@@ -39,15 +40,17 @@
     <div id="invite-modal" class="hidden">
       <p>Send this invite link to a friend:</p>
       <div id="invite-form">
-        <input type="text" id="invite-link" readonly onclick="copyInvite()"></input>
-        <button id="invite-button" onclick="copyInvite()">Copy</button>
+        <input type="text" id="invite-link" readonly onclick="view.copyInvite()"></input>
+        <button id="invite-button" onclick="view.copyInvite()">Copy</button>
       </div>
     </div>
     <div id="game-container">
       <main id="game-set">
         <div id="game-session-actions">
-          <button id="rematch-button" class="post-game hidden" onclick="rematch()">Rematch</button>
-          <button id="reconnect-button" class="post-session hidden" onclick="connect()">New Session</button>
+          <button id="rematch-button" class="post-game hidden"
+                  onclick="controller.rematch()">Rematch</button>
+          <button id="reconnect-button" class="post-session hidden"
+                  onclick="controller.connect()">New Session</button>
         </div>
         <p id="tooltip">Waiting for a friend to join</p>
         <div id="opponent-pool" class="pool">
@@ -86,21 +89,21 @@
         <div id="messages"></div>
         <div id="comment-box">
           <input id="comment">
-          <button id="comment-button" onclick="sendComment()">Send</button>
+          <button id="comment-button" onclick="controller.sendComment()">Send</button>
         </div>
       </aside>
       <aside id="actions">
         <div id="dice-pool">
         </div>
         <button id="roll-button" class="game-button"
-                onclick="roll()" disabled>(R)oll</button>
+                onclick="controller.roll()" disabled>(R)oll</button>
         <button onclick="document.getElementById('roll-button').disabled=false">
           Roll button stuck?
         </button>
         <button id="draw-button" class="game-button"
-                onclick="offerDraw()" disabled>(D)raw</button>
+                onclick="controller.offerDraw()" disabled>(D)raw</button>
         <button id="forfeit-button" class="game-button"
-                onclick="forfeit()" disabled>(F)orfeit</button>
+                onclick="controller.forfeit()" disabled>(F)orfeit</button>
 
         <svg id="die-template" class="hidden" viewBox="-2 -2 102 90">
           <g stroke="black" stroke-width="0.5">

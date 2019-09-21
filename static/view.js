@@ -1,4 +1,4 @@
-/* global model, setTimeout, Notification */
+/* global model, setTimeout, Notification, controller */
 
 // Explicit semicolon so that JS doesn't mistake the parens as calling the object.
 var view = {};
@@ -12,7 +12,7 @@ var view = {};
     }
   }
 
-  view.updateTooltip = function updateTooltip(message) {
+  function updateTooltip(message) {
     // Set the default message if a custom message isn't given.
     if (message === undefined) {
       if (model.gameState.turn === null) {
@@ -48,14 +48,14 @@ var view = {};
     }
 
     if (!model.isValidDestination(destination)) {
-      view.updateTooltip("You can't move there")
+      updateTooltip("You can't move there")
       this.classList.add('invalid-move')
     }
   }
 
   let pageTitle = document.title
   function unhighlightSelected() {
-    view.updateTooltip()
+    updateTooltip()
 
     for (let elem of document.getElementsByClassName('selected')) {
       elem.classList.remove('selected')
@@ -98,16 +98,13 @@ var view = {};
     addTextMessage(source, message + '.')
   }
 
-  view.showComment = function showComment(player, message) {
+  function showComment(player, message) {
     player = player.charAt(0).toUpperCase() + player.slice(1)
     addTextMessage(player + ':', message)
   }
 
-  view.updateTurn = function updateTurn(newTurn) {
-    if (newTurn !== undefined) {
-      model.gameState.turn = newTurn
-    }
-    view.updateTooltip()
+  function updateTurn() {
+    updateTooltip()
 
     if (model.gameState.turn === model.playerColor) {
       view.logActivity('game', 'It is your turn')
@@ -120,7 +117,7 @@ var view = {};
                                                         model.gameState.turn == model.playerColor)
   }
 
-  function createPiece(color, position, onclick) {
+  function createPiece(color, position) {
     let piece = document.createElement('span')
     let player = model.colorToPlayer(color)
 
@@ -130,10 +127,8 @@ var view = {};
       piece.onclick = function () {
         unhighlightSelected()
 
-        if (onclick) {
-          let position = parseInt(this.getAttribute('data-position'))
-          onclick(position)
-        }
+        let position = parseInt(this.getAttribute('data-position'))
+        controller.movePiece(position)
       }
     }
 
@@ -144,24 +139,24 @@ var view = {};
   }
 
   // Add a piece to the board
-  function addPiece(color, position, onclick) {
-    getTileElement(color, position).appendChild(createPiece(color, position, onclick))
+  function addPiece(color, position) {
+    getTileElement(color, position).appendChild(createPiece(color, position))
   }
 
   // Repopulare the board with the appropriate pieces
-  function updateBoard(onPieceClick) {
+  function updateBoard() {
     clearBoard()
     for (let color of ['black', 'white']) {
       // Populate player's starting path
       for (let i = 0; i < 4; i++) {
         if (model.gameState[color].startPath[i] === color)
-          addPiece(color, i+1, onPieceClick)
+          addPiece(color, i+1)
       }
 
       // Populate player's ending path
       for (let i = 0; i < 2; i++) {
         if (model.gameState[color].endPath[i] === color)
-          addPiece(color, i+13, onPieceClick)
+          addPiece(color, i+13)
       }
 
       // Populate the player's spare pieces
@@ -169,7 +164,7 @@ var view = {};
       let piecePool = document.getElementById(model.colorToPlayer(color) + '-pool')
       piecePool.innerHTML = ''
       for (var i = 0; i < amnt; i++) {
-        let piece = createPiece(color, 0, onPieceClick)
+        let piece = createPiece(color, 0)
         piecePool.appendChild(piece)
       }
     }
@@ -177,19 +172,18 @@ var view = {};
     // Populare the game board's shared path
     for (let i = 0; i < 8; i++) {
       if (model.gameState.sharedPath[i] !== 'none')
-        addPiece(model.gameState.sharedPath[i], i+5, onPieceClick)
+        addPiece(model.gameState.sharedPath[i], i+5)
     }
 
   }
 
-  view.updateGameState = function updateGameState(newGameState, onclick) {
-    model.gameState = newGameState
+  function updateGameState() {
     for (let b of document.getElementsByClassName('post-game')) {
       b.classList.add('hidden')
     }
 
-    view.updateTurn()
-    updateBoard(onclick)
+    updateTurn()
+    updateBoard()
 
     // Enable game actions
     for (let gameButton of document.getElementsByClassName('game-button')) {
@@ -233,4 +227,145 @@ var view = {};
     }
   }
 
+  view.showInvite = function showInvite(url) {
+    document.getElementById('invite-link').value = url
+    document.getElementById('invite-modal').classList.remove('hidden')
+  }
+
+  view.hideInvite = function hideInvite() {
+    document.getElementById('invite-modal').classList.add('hidden')
+  }
+
+  // Called by #invite-button
+  view.copyInvite = function copyInvite() {
+    let inviteLink = document.getElementById('invite-link')
+    inviteLink.select()
+    document.execCommand('copy')
+  }
+
+  view.gameOver = function gameOver(reason, sessionActive) {
+    view.logActivity('game', 'Game over: ' + reason)
+
+    let hide = (e) => e.classList.add('hidden')
+    let show = (e) => e.classList.remove('hidden')
+
+    let postGameOptions = document.getElementsByClassName('post-game')
+    let disconnectedOptions = document.getElementsByClassName('post-session')
+
+    if (sessionActive) {
+      for (let b of postGameOptions) show(b)
+      for (let b of disconnectedOptions) hide(b)
+    } else {
+      for (let b of postGameOptions) hide(b)
+      for (let b of disconnectedOptions) show(b)
+    }
+
+    for (let gameButton of document.getElementsByClassName('game-button')) {
+      gameButton.disabled = true
+    }
+    document.getElementById('roll-button').disabled = true
+
+    model.gameState.turn = null
+    model.gameState.lastRoll = null
+    updateTooltip()
+  }
+
+  function getMoveMessage(moveType) {
+    switch (moveType) {
+    case 'movedPiece':
+      return 'moved a piece'
+      break
+    case 'completedPiece':
+      return "completed a piece's full trip"
+      break
+    case 'landedOnRosette':
+      return 'landed on a rosette, netting an extra turn'
+      break
+    case 'capturedPiece':
+      return 'captured an enemy piece'
+      break
+    default:
+      // Something went wrong here, but it's not the end of the world.
+      console.warn(`Unexpected moveType: ${moveType}`)
+
+      return `performed an unexpected move (${moveType})`
+    }
+  }
+
+  function rollDice(total, flips, skipTurn, reason) {
+    let message = 'rolled a ' + total
+    switch (skipTurn) {
+    case 'flippedNothing':
+      message += ' and skipped a turn'
+      break
+    case 'noValidMoves':
+      message += ', and with no valid moves, skipped a turn'
+      break
+    }
+
+    view.logActivity(model.colorToPlayer(model.gameState.turn), message)
+  }
+
+  view.handleGameMessage = function(data) {
+    switch (data.op) {
+    case 'gameToken':
+      view.showInvite(window.location.protocol + '//' +
+                      window.location.host + '/join/' + data.token)
+      break
+    case 'welcome':
+      view.hideInvite()
+      model.playerColor = data.color
+      view.logActivity('game', 'Welcome. You are playing ' + model.playerColor)
+      break
+    case 'gameState':
+      updateGameState()
+      break
+    case 'ack':
+      break
+    case 'roll':
+      if (data.successful) {
+        rollDice(data.total, data.flips, data.skipTurn, data.reason)
+
+        // TODO: Figure out how to cleanly migrate this to controller.js
+        if (data.skipTurn) {
+          updateTurn()
+          model.gameState.turn = model.opponentColor(model.gameState.turn)
+        }
+      } else {
+        view.logActivity('game', "Can't roll: " + data.reason)
+      }
+      break
+    case 'move':
+      if (data.successful) {
+        view.logActivity(model.colorToPlayer(model.gameState.turn), getMoveMessage(data.moveType))
+      } else {
+        view.logActivity('game', "Can't move: " + data.reason)
+      }
+      break
+    case 'message':
+      showComment(model.colorToPlayer(data.color), data.message)
+      break
+    case 'gameOver':
+      if (data.winner === null) {
+        view.gameOver("it's a tie", true)
+      } else if (data.winner === model.playerColor) {
+        view.gameOver('you win', true)
+      } else {
+        view.gameOver('opponent wins', true)
+      }
+      break
+    case 'tie':
+      view.logActivity(data.player, 'offers a tie')
+      break
+    case 'forfeit':
+      view.logActivity(data.player, 'forfeits')
+      break
+    case 'err':
+      view.logActivity('game', "Error: " + data.reason)
+      break
+    default:
+      view.logActivity('game', 'Unhandled op ' + data.op)
+      break
+    }
+  }
 })()
