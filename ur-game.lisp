@@ -2,10 +2,8 @@
   (:use :cl :ur-game.engine
         :ur-game.config :ur-game.json)
   (:import-from :alexandria
-                :switch
                 :when-let
-                :if-let
-                :whichever)
+                :if-let)
   (:import-from :json
                 :encode-json-plist-to-string
                 :decode-json-from-string)
@@ -84,22 +82,16 @@
 (defun start-online-session (session)
   (setf (status session) :playing)
   (setf (game session) (make-instance 'game))
-  (let ((clients (hunchensocket:clients session)))
-    (whichever
-     (progn
-          (setf (color (first clients)) :white)
-          (setf (color (second clients)) :black))
-     (progn
-          (setf (color (first clients)) :black)
-          (setf (color (second clients)) :white)))
+  (let ((clients (alexandria:shuffle (hunchensocket:clients session))))
+    (setf (color (first clients)) :white)
+    (setf (color (second clients)) :black)
 
-    (loop :for client :in clients
-       :do (progn
-             (setf (offered-draw client) nil)
-             (send-message* client
-                            :op :game-start
-                            :color (color client)
-                            :game (game session))))))
+    (dolist (client clients)
+      (setf (offered-draw client) nil)
+      (send-message* client
+                     :op :game-start
+                     :color (color client)
+                     :game (game session)))))
 
 (defmethod hunchensocket:client-connected ((session game-session) client)
   (ecase (status session)
@@ -122,6 +114,7 @@
   (broadcast-message* session
                       :op :game-over
                       :winner winner
+
                       :game (game session)))
 
 (defmethod hunchensocket:text-message-received ((session game-session) client message)

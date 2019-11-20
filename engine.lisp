@@ -68,13 +68,11 @@
                             stream))
 
 (defun opponent-color (color)
-  (format t "opponent-color ~s ~a~%" color (member color '(:white :black)))
   (ecase color
     (:white :black)
     (:black :white)))
 
 (defun game-player (game color)
-  (format t "Gaem-player ~s ~a~%" color (member color '(:white :black)))
   (with-slots (white black) game
     (ecase color
       (:white white)
@@ -86,6 +84,11 @@
 (defun opponent-player (game)
   "Retun the player waiting for their turn."
   (game-player game (opponent-color (turn game))))
+
+(defun game-phase (game)
+  (if (slot-value game 'last-roll)
+      :move-phase
+      :roll-phase))
 
 (defun player-tile (game index)
   "Return ownership of the player's effective tile by index."
@@ -128,7 +131,8 @@
 (defun valid-move (game index)
   "Return two values: Whether the move is valid, and the type of move."
   (with-slots (last-roll turn) game
-    (unless last-roll (return-from valid-move (values nil :not-rolled-yet)))
+    (unless (eq :move-phase (game-phase game))
+      (return-from valid-move (values nil :not-rolled-yet)))
 
     (let ((dest-index (+ index last-roll)))
       (cond
@@ -220,7 +224,7 @@
   "Toss four coins and sum the total, providing a similar D4 allegedly
 played in the original game. Store the sum in the game."
   (with-slots (random-state last-roll) game
-    (when last-roll
+    (unless (eq :roll-phase (game-phase game))
       (return-from roll (list :successful (make-instance 'json-bool
                                                          :p nil)
                               :reason :already-rolled)))
