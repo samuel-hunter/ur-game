@@ -9,7 +9,7 @@
                :cl-json
                :hunchentoot
                :hunchensocket
-               :osicat
+               :uiop
                :session-token)
   :components ((:file "json")
                (:file "engine" :depends-on ("json"))

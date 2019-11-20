@@ -1,7 +1,7 @@
 (defpackage #:ur-game.config
   (:use :cl)
-  (:import-from :osicat
-                :environment-variable)
+  (:import-from :uiop
+                :getenv)
   (:import-from :alexandria
                 :if-let)
   (:export :config))
@@ -17,7 +17,7 @@
     (:dev (:ws-port . 8081))))
 
 (defun exec-environment ()
-  (if (string-equal (environment-variable "PRODUCTION")
+  (if (string-equal (getenv "PRODUCTION")
                     "1")
       :prod
       :dev))
