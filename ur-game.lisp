@@ -17,9 +17,13 @@
 (defvar *ws-acceptor* nil)
 
 (defparameter +app-root+ (asdf:system-source-directory :ur-game))
-(defparameter +static-root+ (or (config :htdocs)
-                                (merge-pathnames #P "static/" +app-root+)))
-(defparameter +index-root+ (merge-pathnames #P "index.html" +static-root+))
+
+(defun static-root ()
+  (or (config :htdocs)
+      (merge-pathnames #P "htdocs/" +app-root+)))
+
+(defun index-root ()
+  (merge-pathnames #P "index.html" (static-root)))
 
 (defparameter +join-url-scanner+ (cl-ppcre:create-scanner "^/join/([\\w]+)$"))
 
@@ -223,9 +227,9 @@
   (stop)
 
   (setf hunchentoot:*dispatch-table*
-        (list (hunchentoot:create-static-file-dispatcher-and-handler "/" +index-root+)
+        (list (hunchentoot:create-static-file-dispatcher-and-handler "/" (index-root))
               'invite-link-dispatcher
-              (hunchentoot:create-folder-dispatcher-and-handler "/" +static-root+)))
+              (hunchentoot:create-folder-dispatcher-and-handler "/" (static-root))))
   (setf hunchensocket:*websocket-dispatch-table*
         (list 'new-game-dispatcher
               'join-game-dispatcher))
