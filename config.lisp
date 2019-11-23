@@ -13,7 +13,7 @@
 ;; next alists are config variables.
 (defparameter *config*
   '((:common (:http-port . 8080) (:debug . t))
-    (:prod (:ws-port . 8082) (:debug . nil))
+    (:prod (:ws-port . 8082) (:debug . nil) (:htdocs . #P"/srv/ur-game/"))
     (:dev (:ws-port . 8081))))
 
 (defun exec-environment ()

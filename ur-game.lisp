@@ -8,6 +8,7 @@
                 :encode-json-plist-to-string
                 :decode-json-from-string)
   (:export :start
+           :main
            :stop))
 
 (in-package #:ur-game)
@@ -16,7 +17,8 @@
 (defvar *ws-acceptor* nil)
 
 (defparameter +app-root+ (asdf:system-source-directory :ur-game))
-(defparameter +static-root+ (merge-pathnames #P "static/" +app-root+))
+(defparameter +static-root+ (or (config :htdocs)
+                                (merge-pathnames #P "static/" +app-root+)))
 (defparameter +index-root+ (merge-pathnames #P "index.html" +static-root+))
 
 (defparameter +join-url-scanner+ (cl-ppcre:create-scanner "^/join/([\\w]+)$"))
@@ -209,6 +211,14 @@
   (values (stop-acceptor *http-acceptor*)
           (stop-acceptor *ws-acceptor*)))
 
+(defun set-deathmatch (session-token)
+  "Given a session token, set the spare pieces of both players to 1. For debug purposes"
+  (let* ((session (find-session session-token))
+         (game (game session)))
+    (setf (spare-pieces (white-player game)) 1)
+    (setf (spare-pieces (black-player game)) 1)
+    (send-game-state session)))
+
 (defun start (&key (http-port (config :http-port)) (ws-port (config :ws-port)))
   (stop)
 
@@ -230,10 +240,9 @@
   (values (hunchentoot:start *http-acceptor*)
           (hunchentoot:start *ws-acceptor*)))
 
-(defun set-deathmatch (session-token)
-  "Given a session token, set the spare pieces of both players to 1. For debug purposes"
-  (let* ((session (find-session session-token))
-         (game (game session)))
-    (setf (spare-pieces (white-player game)) 1)
-    (setf (spare-pieces (black-player game)) 1)
-    (send-game-state session)))
+(defun main ()
+  "Start the server as a compiled binary."
+  (start)
+  (loop for thread in (remove-if (lambda (x) (eq x (bordeaux-threads:current-thread)))
+                                 (bordeaux-threads:all-threads))
+       do (bordeaux-threads:join-thread thread)))
