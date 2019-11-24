@@ -1,0 +1,31 @@
+arch: amd64
+environment:
+ prod: cd@royalgameofur.net
+image: debian/buster
+packages:
+- sbcl
+- wget
+- rsync
+secrets:
+- d1758b27-ecdb-4597-8710-69569c2f57dd
+sources:
+- https://git.sr.ht/~shunter/ur-game
+tasks:
+- configure: |
+    wget https://beta.quicklisp.org/quicklisp.lisp
+    sbcl --load quicklisp.lisp \
+         --eval '(quicklisp-quickstart:install)' \
+         --eval '(ql-util:without-prompting (ql:add-to-init-file))' \
+         --eval '(exit)'
+- build: |
+    cd ur-game
+    make build
+- deploy: |
+    cd ur-game
+    sshopts="ssh -o StrictHostKeyChecking=no"
+    rsyncopts="--recursive --partial --progress --delete"
+    
+    $sshopts $prod sudo stopur
+    rsync --rsh="$sshopts" $rsyncopts htdocs/ $prod:/srv/ur-game/htdocs
+    rsync --rsh="$sshopts" $rsyncopts ur-game $prod:/srv/ur-game/
+    ssh $prod sudo startur

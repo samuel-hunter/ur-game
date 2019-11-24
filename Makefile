@@ -4,7 +4,7 @@ PREFIX ?= /usr/local
 
 SOURCES=$(wildcard *.lisp)
 
-default: ur-game
+default: build
 build: ur-game
 all: default
 
@@ -19,6 +19,5 @@ install:
 
 clean:
 	$(RM) kablature
-	$(RM) $(EXAMPLE_TARGETS)
 
 .PHONY: default build all install clean
