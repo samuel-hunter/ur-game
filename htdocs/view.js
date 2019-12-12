@@ -314,8 +314,7 @@ var view = {};
       break
     case 'roll':
       if (data.successful) {
-        if (model.gameState.turn === model.playerColor)
-          showDice(data.total, data.flips, data.skipTurn, data.reason)
+        showDice(data.total, data.flips, data.skipTurn, data.reason)
 
         // TODO: Figure out how to cleanly migrate this to controller.js
         if (data.skipTurn) {
