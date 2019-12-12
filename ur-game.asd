@@ -12,6 +12,7 @@
                #:uiop
                #:session-token)
 
+  :pathname "src"
   :components ((:file "json")
                (:file "engine" :depends-on ("json"))
                (:file "config")

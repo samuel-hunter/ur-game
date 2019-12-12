@@ -3,21 +3,17 @@ LISP ?= sbcl
 PREFIX ?= /usr/local
 
 SOURCES=$(wildcard *.lisp)
+TARGET=src/ur-game
 
-default: build
-build: ur-game
-all: default
+default build all: $(TARGET)
 
-ur-game: $(SOURCES)
+$(TARGET): $(SOURCES)
 	$(LISP) --load ur-game.asd \
 			--eval '(ql:quickload :ur-game)' \
 			--eval '(asdf:make :ur-game)' \
 			--eval '(quit)'
 
-install:
-	install -t $(PREFIX)/bin kablature
-
 clean:
-	$(RM) kablature
+	$(RM) $(TARGET)
 
-.PHONY: default build all install clean
+.PHONY: default build all clean
