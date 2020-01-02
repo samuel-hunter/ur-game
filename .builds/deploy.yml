@@ -7,7 +7,7 @@ packages:
 - wget
 - rsync
 secrets:
-- d1758b27-ecdb-4597-8710-69569c2f57dd
+- c7146084-8b8d-4dff-b536-4187a0c6fbef
 sources:
 - https://git.sr.ht/~shunter/ur-game
 tasks:

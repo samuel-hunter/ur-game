@@ -1,0 +1,16 @@
+image: alpine/edge
+repositories: {}
+environment:
+ mirror: git@github.com:samuel-hunter/ur-game.git
+ GIT_SSH_COMMAND: ssh -o StrictHostKeyChecking=no
+secrets:
+- c7146084-8b8d-4dff-b536-4187a0c6fbef
+shell: false
+sources:
+- https://git.sr.ht/~shunter/ur-game
+tasks:
+- updatemirror: |
+    cd ur-game
+    git remote add mirror $mirror
+    git push mirror master
+triggers: []
