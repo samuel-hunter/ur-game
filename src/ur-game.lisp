@@ -246,6 +246,7 @@
 
 (defun main ()
   "Start the server as a compiled binary."
+  (format t "Starting the Royal Game of Ur...~%")
   (start)
   (loop for thread in (remove-if (lambda (x) (eq x (bordeaux-threads:current-thread)))
                                  (bordeaux-threads:all-threads))

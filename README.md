@@ -11,17 +11,10 @@ Ur](https://img.youtube.com/vi/WZskjLq040I/0.jpg)](https://youtu.be/WZskjLq040I
 
 # Host the Software
 
-The server is hosted using Common Lisp with Quicklisp. To run the
-server, clone the project, and then run:
+The service is deployed using docker. To run without HTTPS:
 
-    $ make build
-    $ ./ur-game
-
-By default, the server runs an HTTP socket on 8080, and a WS socket
-on 8081. With the environment variable `PRODUCTION=1`, the WS socket
-is moved to 8082. This is mainly used so that nginx can be responsible
-for wrapping it around with HTTPS and WSS. on ports 443 and 8081,
-respectively.
+    $ docker build -t ur-game .
+    $ docker run -d -p 8080:8080 -p 8081:8082 ur-game
 
 # Rules
 
