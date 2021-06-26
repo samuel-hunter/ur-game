@@ -3,7 +3,8 @@
         :ur-game.config :ur-game.json)
   (:import-from :alexandria
                 :when-let
-                :if-let)
+                :if-let
+                :switch)
   (:import-from :json
                 :encode-json-plist-to-string
                 :decode-json-from-string)
@@ -122,6 +123,19 @@
                       :winner winner
 
                       :game (game session)))
+
+(defun process-action (game action)
+  (switch ((cdr (assoc :op action)) :test 'string-equal)
+    ("roll" (list* :op :roll
+                   (roll game)))
+    ("move" (let ((position (cdr (assoc :position action))))
+              (list* :op :move
+                     (make-move game position))))
+    (t (list :op :err
+             :reason :no-such-operand))))
+
+(defun action-successful (action-result)
+  (json-bool-p (getf action-result :successful)))
 
 (defmethod hunchensocket:text-message-received ((session game-session) client message)
   (let* ((message (decode-json-from-string message))

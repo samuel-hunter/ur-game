@@ -16,8 +16,8 @@
            :spare-pieces
 
            :winner
-           :action-successful
-           :process-action))
+           :roll
+           :make-move))
 
 (in-package #:ur-game.engine)
 
@@ -242,16 +242,3 @@ played in the original game. Store the sum in the game."
                   :move-type move-type))
           (list :successful successful-json
                 :reason move-type)))))
-
-(defun process-action (game action)
-  (switch ((cdr (assoc :op action)) :test 'string-equal)
-    ("roll" (list* :op :roll
-                   (roll game)))
-    ("move" (let ((position (cdr (assoc :position action))))
-              (list* :op :move
-                     (make-move game position))))
-    (otherwise (list :op :err
-                     :reason :no-such-operand))))
-
-(defun action-successful (action-result)
-  (json-bool-p (getf action-result :successful)))
