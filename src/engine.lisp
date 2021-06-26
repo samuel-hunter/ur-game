@@ -24,7 +24,7 @@
 (defun make-empty-path (length)
   (make-array length :initial-element :none))
 
-;; path lengtsh
+;; path lengths
 (defparameter +start-length+ 4)
 (defparameter +shared-length+ 8)
 (defparameter +end-length+ 2)
@@ -184,41 +184,6 @@
   (let ((flips (loop :repeat 4
                   :collect (random 2 random-state))))
     (values (reduce #'+ flips) flips)))
-
-(defun profile-roll (&key (random-state *random-state*) (iterations 10000))
-  "Print two values: an alist of the distribution of rolls, and an alist of the theoretical outcome."
-  (let ((nums (make-hash-table)))
-    (loop :for x :from 0 :to 4 :do (setf (gethash x nums) 0))
-    (loop :repeat iterations
-       :do (incf (gethash (random-roll random-state) nums)))
-    (format t "Actual:")
-    (loop :for x :from 0 :to 4 :do (print (cons x (gethash x nums))))
-    (format t "~&~%Expected:")
-    (loop
-        :for num :from 0 :to 4
-        :for appearances :in '(1/16 4/16 6/16 4/16 1/16)
-        :do (print (cons num (coerce (* iterations appearances) 'float))))))
-
-(defun profile-roll-2d (&key (random-state *random-state*) (iterations 10000))
-  "Return a 2-D distribution of the rolls"
-  (let ((nums (make-hash-table :test 'equal)))
-    (loop :for x :from 0 :to 4
-       :do (loop :for y :from 0 :to 4
-              :do (setf (gethash (cons x y) nums) 0)))
-    (loop :repeat iterations
-       :for x = (random-roll random-state)
-       :for y = (random-roll random-state)
-       :do (incf (gethash (cons x y) nums)))
-
-    (format t "~&~{~{~8d~}~%~}"
-            (loop :for y :from 0 :to 4
-               :collect (loop :for x :from 0 :to 4
-                           :collect (gethash (cons x y) nums))))
-
-    (format t "~2&~{~{~8d~}~%~}"
-            (loop :for y :in '(1/16 4/16 6/16 4/16 1/16)
-               :collect (loop :for x :in '(1/16 4/16 6/16 4/16 1/16)
-                             :collect (floor (* iterations x y)))))))
 
 (defun roll (game)
   "Toss four coins and sum the total, providing a similar D4 allegedly
