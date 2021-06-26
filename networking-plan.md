@@ -37,7 +37,7 @@
     piece. The server sends a 'Game Over' message with the victor as
     White, which Alice interprets as her win and Bob his loss. The
     server disconnects both players' sockets.
-    
+
 ## Technical Outline
 
 1. Alice to Server: NEWGAME
@@ -71,4 +71,3 @@
 10. ...
     Alice to Server: MOVE 14 #:WHITETOK
     Server to ALl: GAMEOVER WHTIE
-    
