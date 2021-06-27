@@ -17,7 +17,8 @@
 
            :winner
            :roll
-           :make-move))
+           :make-move
+           :offer-draw))
 
 (in-package #:ur-game.engine)
 
@@ -48,7 +49,9 @@
    (end-path :initform (make-empty-path +end-length+)
              :accessor end-path)
    (spare-pieces :initform +starting-pieces+
-                 :accessor spare-pieces)))
+                 :accessor spare-pieces)
+   (draw-offered :initform nil
+                 :accessor draw-offered)))
 
 (defclass game ()
   ((white :initform (make-instance 'player)
@@ -180,6 +183,16 @@
     (setf turn (opponent-color (turn game)))
     (setf last-roll nil)))
 
+(defun offer-draw (game color)
+  "Mark the player as having offered a draw, and return whether both players agree."
+  (let ((player (game-player game color)))
+    (setf (draw-offered player) t)
+    (draw-offered (game-player game (opponent-color color)))))
+
+(defun clear-draws (game)
+  (setf (draw-offered (game-player game :white)) nil
+        (draw-offered (game-player game :black)) nil))
+
 (defun random-roll (&optional (random-state *random-state*))
   (let ((flips (loop :repeat 4
                   :collect (random 2 random-state))))
@@ -201,6 +214,7 @@ played in the original game. Store the sum in the game."
                          ((= total 0) :flipped-nothing)
                          ((not (valid-turn-p game)) :no-valid-moves))))
         (when skip-turn (next-turn game))
+        (clear-draws game)
         (list :successful (make-instance 'json-bool
                                          :p t)
               :total total
@@ -223,7 +237,7 @@ played in the original game. Store the sum in the game."
         (setf (player-tile game dest-index) turn))
       dest-index)))
 
-
+;; TODO clear JSON
 (defun make-move (game position)
   (unless (integerp position)
     (return-from make-move (list :successful nil
@@ -237,6 +251,7 @@ played in the original game. Store the sum in the game."
             (if (eq move-type :landed-on-rosette)
                 (setf (slot-value game 'last-roll) nil)
                 (next-turn game))
+            (clear-draws game)
             (list :successful successful-json
                   :turn-end t
                   :move-type move-type))
