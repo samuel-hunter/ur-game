@@ -3,8 +3,7 @@
 ;; Manages the HTTP server, WebSocket server, and WebSocket message
 ;; interpretation.
 (defpackage #:ur-game
-  (:use :cl :ur-game.engine
-        :ur-game.config :ur-game.json)
+  (:use :cl :ur-game.engine :ur-game.json)
   (:import-from :alexandria
                 :curry
                 :when-let
@@ -15,7 +14,6 @@
                 :encode-json-plist-to-string
                 :decode-json-from-string)
   (:export :start
-           :stop
            :*app*))
 
 (in-package #:ur-game)
@@ -24,14 +22,10 @@
 
 (defparameter +app-root+
   (asdf:system-source-directory :ur-game))
-
-(defun static-path ()
-  (or (config :htdocs)
-      (merge-pathnames #P"static/" +app-root+)))
-
-(defun index-path ()
-  (or (config :index)
-      (merge-pathnames #P"index.html" +app-root+)))
+(defparameter +static-path+
+  (merge-pathnames #P"static/" +app-root+))
+(defparameter +index-path+
+  (merge-pathnames #P"index.html" +app-root+))
 
 ;; Websocket close codes
 
@@ -259,7 +253,6 @@
       (declare (ignore responder))
       (websocket-driver:start-connection ws))))
 
-(defvar *ws-handler* nil)
 (defvar *website-handler* nil)
 
 (defun 404-server (env)
@@ -276,7 +269,7 @@
         (let ((path-info (getf env :path-info)))
           (if (or (null path-info)
                   (string= "/" path-info))
-              `(200 (:content-type "text/html") ,(index-path))
+              `(200 (:content-type "text/html") ,+index-path+)
               (funcall app env)))))
     ;; Redirect "/join/{token}" to "/#/{token}"
     (lambda (app)
@@ -291,19 +284,13 @@
             (websocket-app env)
             (funcall app env))))
     ;; Static Path
-    (:static :path "/static/" :root (static-path))
+    (:static :path "/static/" :root +static-path+)
     ;; A 404 server that isn't run because :static takes over everything.
     '404-server))
 
-(defun stop ()
-  (when *ws-handler* (clack:stop *ws-handler*))
-  (when *website-handler* (clack:stop *website-handler*))
-  (values))
-
 (defun start ()
-  (stop)
-  (setf *website-handler* (clack:clackup
-                            *app*
+  (when *website-handler* (clack:stop *website-handler*))
+  (setf *website-handler* (clack:clackup *app*
                             :port 8080
                             :server :hunchentoot))
   (values))

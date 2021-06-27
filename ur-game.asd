@@ -16,5 +16,4 @@
   :pathname "src"
   :components ((:file "json")
                (:file "engine")
-               (:file "config")
-               (:file "ur-game" :depends-on ("engine" "config" "json"))))
+               (:file "ur-game" :depends-on ("engine" "json"))))
