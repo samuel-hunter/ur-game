@@ -1,9 +1,15 @@
 # API as it's planned to be
 
-The goal is for communication to have Level 3 Maturity on the Richardson REST
+The goal is for communication to appriach Level 3 Maturity on the Richardson REST
 Maturity model. Most of the API will be within a websocket with two types of
 endpoints: one endpoint to create a new session, and one to join a preexisting
 session.
+
+In reality, the API won't be stateless. I think it makes sense at a minimum for
+the server to remember which player the client is, which breaks the basic
+statelessness principle of REST from what I understand. That said, I still see
+benefit into adhering to the other principles while keeping the statefullness
+that *is* there to a minimum.
 
 ## Communication model
 
@@ -36,7 +42,7 @@ uses those instead of hardcoded URI's.
 
 A heartbeat tells the server it's alive. It's recommended for now to make this
 request about every 5 seconds. The server should automatically disconnect a
-client that doesn't respond after 30 seconds:
+client that doesn't respond after about 30 seconds:
 
 ```json
 { "request": "$uri" }
