@@ -1,24 +1,22 @@
 (defpackage #:ur-game.engine
-  (:use :cl :ur-game.json)
+  (:use :cl)
   (:import-from :alexandria
                 :switch)
-  (:export :+start-length+
-           :+shared-length+
-           :+end-length+
-           :+path-length+
-
-           :opponent-color
-           :game
-           :turn
-
-           :white-player
-           :black-player
-           :spare-pieces
-
+  (:export :game
            :winner
+
+           ;; Game actions
            :roll
            :make-move
-           :offer-draw))
+           :offer-draw
+
+           ;; TODO figure out how to make the app not care about whose turn it is.
+           :turn
+
+           ;; Exported only for debugging method `make-deathmatch'
+           :white-player
+           :black-player
+           :spare-pieces))
 
 (in-package #:ur-game.engine)
 
@@ -63,12 +61,15 @@
    (turn :initform :white
          :accessor turn)
    (random-state :initform (make-random-state t))
-   (last-roll :initform nil)))
+   (last-roll :initform nil
+              :accessor last-roll)))
 
+;; TODO figure out how to separate this last piece of presentation from the
+;; game engine.
 (defmethod json:encode-json ((object game) &optional (stream json:*json-output*))
-  (encode-json-select-slots object
-                            '(white black shared-path turn last-roll)
-                            stream))
+  (json:with-object (stream)
+    (dolist (slot '(white black shared-path turn last-roll))
+      (json:encode-object-member slot (slot-value object slot) stream))))
 
 (defun opponent-color (color)
   (ecase color
@@ -165,7 +166,7 @@
                  (end-path player))))
 
 (defun winner (game)
-  "Return the winner of the game, or NIL if the game is still going."
+  "Return the game winner's color, or NIL if the game is still ongoing."
   (flet ((is-player-empty (player)
            (loop :for tile :across (player-tiles game player)
               :when (eq tile player) :do (return nil)
@@ -199,29 +200,26 @@
     (values (reduce #'+ flips) flips)))
 
 (defun roll (game)
-  "Toss four coins and sum the total, providing a similar D4 allegedly
-played in the original game. Store the sum in the game."
+  "Toss four coins and sum the total, providing a similar D4 allegedly played
+   in the original game. Return 4 values: Whether the move was made, the total
+   flips up, the individual flips, whether it caused the turn to skip, and (if
+                                                                             applicable)
+   the reason why the move failed."
   (with-slots (random-state last-roll) game
-    (unless (eq :roll-phase (game-phase game))
-      (return-from roll (list :successful (make-instance 'json-bool
-                                                         :p nil)
-                              :reason :already-rolled)))
+    ;; TODO use conditions to go for failure instead. Or maybe a Result monad.
+    ;; It makes better sense here.
+    (if (not (eq :roll-phase (game-phase game)))
+        (values nil nil nil nil :already-rolled)
+        (multiple-value-bind (total flips) (random-roll random-state)
+          (setf last-roll total)
+          (clear-draws game)
+          (let ((bad-roll (cond ((= total 0) :flipped-nothing)
+                                  ((not (valid-turn-p game)) :no-valid-moves))))
+            (when bad-roll (next-turn game))
+            (values t total flips bad-roll))))))
 
-    (multiple-value-bind (total flips) (random-roll random-state)
-
-      (setf last-roll total)
-      (let ((skip-turn (cond
-                         ((= total 0) :flipped-nothing)
-                         ((not (valid-turn-p game)) :no-valid-moves))))
-        (when skip-turn (next-turn game))
-        (clear-draws game)
-        (list :successful (make-instance 'json-bool
-                                         :p t)
-              :total total
-              :flips flips
-              :skip-turn (make-instance 'json-bool
-                                        :p skip-turn
-                                        :generalised t))))))
+(defun reset-roll (game)
+  (setf (last-roll game) nil))
 
 (defun move-piece (game index)
   "Move a piece from tile INDEX to the last roll. Return the destination tile's index."
@@ -237,23 +235,18 @@ played in the original game. Store the sum in the game."
         (setf (player-tile game dest-index) turn))
       dest-index)))
 
-;; TODO clear JSON
 (defun make-move (game position)
-  (unless (integerp position)
-    (return-from make-move (list :successful nil
-                                 :reason :invalid-position)))
-
+  "Attempt to move a piece from the given position. Return 3 values: whether
+   it's successful, that type of move that was (or would have been) made, and
+   whether the turn ended."
+  (check-type position integer)
   (multiple-value-bind (successful move-type) (valid-move game position)
-    (let ((successful-json (make-instance 'json-bool :p successful)))
-      (if successful
-          (progn
-            (move-piece game position)
-            (if (eq move-type :landed-on-rosette)
-                (setf (slot-value game 'last-roll) nil)
-                (next-turn game))
-            (clear-draws game)
-            (list :successful successful-json
-                  :turn-end t
-                  :move-type move-type))
-          (list :successful successful-json
-                :reason move-type)))))
+    (if (not successful)
+        (values nil move-type)
+        (progn
+          (move-piece game position)
+          (clear-draws game)
+          (if (eq move-type :landed-on-rosette)
+              (reset-roll game)
+              (next-turn game))
+          (values t move-type (not (eq move-type :landed-on-rosette)))))))

@@ -170,7 +170,8 @@ Indicates the turn-controlling player rolled:
 {
 	"op": "roll",
 	"successful": boolean,
-	"flips": [ zeroOrOne, zeroOrOne, zeroOrOne, zeroOrOne ],
+	"total": integer,
+	"points": [ oneOrZero, oneOrZero, oneOrZero, oneOrZero ],
 	"skipTurn": boolean
 }
 ```

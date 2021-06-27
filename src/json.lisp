@@ -5,8 +5,7 @@
                 :*json-output*)
   (:export
    :json-bool
-   :json-bool-p
-   :encode-json-select-slots))
+   :json-bool-p))
 
 (in-package #:ur-game.json)
 
@@ -21,9 +20,3 @@
       ((and p generalised) (encode-json p stream))
       (p (princ "true" stream))
       (t (princ "false" stream)))))
-
-(defun encode-json-select-slots (object slots &optional (stream json:*json-output*))
-  "Encode a JSON object with the chosen select slots"
-  (json:with-object (stream)
-    (dolist (slot slots)
-      (json:encode-object-member slot (slot-value object slot) stream))))

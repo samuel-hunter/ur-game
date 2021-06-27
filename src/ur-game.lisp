@@ -63,6 +63,10 @@
 (defun session-full-p (session)
   (>= (length (hunchensocket:clients session)) 2))
 
+(defun client-turn-p (session client)
+  "Return whether it is the client player's turn"
+  (eq (turn (game session)) (color client)))
+
 (defun stop-session (session reason &key (status 1000))
   "Disconnect all clients and remove the game session from memory."
   (loop :for client :in (hunchensocket:clients session)
@@ -119,20 +123,7 @@
   ;; TODO see if (stop-sesion) disconnecting clients manually triggers this event.
   (stop-session session "Opponent disconnected" :status +ws-code-opponent-disconnected+))
 
-;; text-message-received helper functions
-
-(defun process-action (game action)
-  (switch ((cdr (assoc :op action)) :test #'string-equal)
-    ("roll" (list* :op :roll
-                   (roll game)))
-    ("move" (list* :op :move
-                   (make-move game (cdr (assoc :position action)))))
-    (t (list :op :err
-             :reason :no-such-operand))))
-
-(defun action-successful-p (action-result)
-  (json-bool-p (getf action-result :successful)))
-
+;; text-message-received helper function
 (defun send-game-state (game-session)
   (broadcast-message* game-session
                       :op :game-state
@@ -162,20 +153,50 @@
       ("forfeit" (broadcast-message* session
                                      :op :forfeit
                                      :player (color client)))
-      (t (if (not (eq (color client) (turn game)))
-             (send-message* client
-                            :op :err
-                            :reason :not-your-turn)
-             (let ((result (process-action game message)))
-               (print (list :the-result-retard result))
-               (if (action-successful-p result)
-                   (progn
-                     (broadcast-message session result)
-                     (if-let (winner (winner game))
-                       (stop-game session winner)
-                       (when (getf result :turn-end)
-                         (send-game-state session))))
-                   (send-message client result))))))))
+      ("roll" (if (not (client-turn-p session client))
+                  (send-message* client
+                                 :op :err
+                                 :reason :not-your-turn)
+                  (multiple-value-bind (successful-p total flips turn-ended-p error-reason)
+                    (roll game)
+                    (if successful-p
+                        (broadcast-message* session
+                                            :op :roll
+                                            :successful t
+                                            :total total
+                                            :flips flips
+                                            :skip-turn (make-instance
+                                                         'json-bool :p turn-ended-p))
+                        (send-message* client
+                                       :op :roll
+                                       :successful (make-instance
+                                                     'json-bool :p nil)
+                                       :reason error-reason)))))
+       ("move" (if (not (client-turn-p session client))
+                   (send-message* client
+                                  :op :err
+                                  :reason :not-your-turn)
+                   (multiple-value-bind (successful-p move-type turn-ended-p)
+                     (make-move game (cdr (assoc :position message)))
+                     (if successful-p
+                         (progn
+                           (broadcast-message* session
+                                               :op :move
+                                               :successful t
+                                               :move-type move-type
+                                               :skip-turn (make-instance
+                                                            'json-bool :p turn-ended-p))
+                           (if-let (winner (winner game))
+                             (stop-game session winner)
+                             (send-game-state session)))
+                         (send-message* client
+                                        :op :move
+                                        :successful (make-instance
+                                                      'json-bool :p nil)
+                                        :reason move-type)))))
+       (t (send-message* client
+                         :op :err
+                         :reason :no-such-operand)))))
 
 (defun new-game-dispatcher (request)
   (when (string= (hunchentoot:script-name request) "/new")
