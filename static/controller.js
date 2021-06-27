@@ -67,18 +67,16 @@ let controller = {};
     }
 
     let socketUrl
-    if (window.location.protocol === 'https:') {
+    if (location.protocol === 'https:') {
       socketUrl = 'wss://'
     } else {
       socketUrl = 'ws://'
     }
 
-    socketUrl += document.domain + ':8081'
-    if (token) {
-      socketUrl += '/join/' + token
-    } else {
-      socketUrl += '/new'
-    }
+    socketUrl += location.hostname +
+		  (location.port ? (':' + location.port) : '') +
+		  '/wss/sessions' +
+		  (token ? ('/' + token) : '')
 
     webSocket = new WebSocket(socketUrl)
     webSocket.onmessage = function (event) {
@@ -157,9 +155,7 @@ let controller = {};
   }
 
   function start() {
-    let socketUrl = 'ws://' + document.domain + ':8081'
     let tokenRegex = /#\/(\w+)/
-
     let match = tokenRegex.exec(window.location.hash)
     if (match) {
       controller.connect(match[1])

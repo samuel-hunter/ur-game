@@ -12,9 +12,9 @@
 ;; the execution enviornment (production, dev etc) and the keys of the
 ;; next alists are config variables.
 (defparameter *config*
-  '((:common (:http-port . 8080) (:debug . t))
-    (:prod (:ws-port . 8082) (:debug . nil) (:htdocs . #P"/srv/ur-game/htdocs/"))
-    (:dev (:ws-port . 8081))))
+  '((:common (:debug . t))
+    (:prod (:debug . nil) (:htdocs . #P"/srv/ur-game/htdocs/"))
+    (:dev)))
 
 (defun exec-environment ()
   (if (string-equal (getenv "PRODUCTION")

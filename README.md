@@ -1,6 +1,6 @@
 # ur-game
 
-This will be a web server that hosts 2-player sessions of [The Royal
+A web app that hosts 2-player sessions of [The Royal
 Game of Ur](https://en.wikipedia.org/wiki/Royal_Game_of_Ur), inspired
 by this [YouTube video](https://www.youtube.com/watch?v=WZskjLq040I)
 from The British Museum:
@@ -9,12 +9,19 @@ from The British Museum:
 Ur](https://img.youtube.com/vi/WZskjLq040I/0.jpg)](https://youtu.be/WZskjLq040I
 "Tom Scott vs Irving Finkel: The Royal Game of Ur")
 
-# Host the Software
+I took advantage of this project to learn about WebSocket communications, and
+Common Lisp web development.
 
-The service is deployed using docker. To run without HTTPS:
+# Run the Software
 
-    $ docker build -t ur-game .
-    $ docker run -d -p 8080:8080 -p 8081:8082 ur-game
+The web app runs on [Clack](https://github.com/fukamachi/clack). I recommend
+using Roswell and `clackup`. to start the server:
+
+    $ clackup clackup.lisp
+
+Alternatively, with your CL impl of choice (I use SBCL):
+
+    $ sbcl --load ur-game.asd --eval '(ql:quickload :ur-game) (ur-game:start)'
 
 # Rules
 

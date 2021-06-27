@@ -15,7 +15,8 @@
                 :encode-json-plist-to-string
                 :decode-json-from-string)
   (:export :start
-           :stop))
+           :stop
+           :*app*))
 
 (in-package #:ur-game)
 
@@ -24,9 +25,13 @@
 (defparameter +app-root+
   (asdf:system-source-directory :ur-game))
 
-(defun static-root ()
+(defun static-path ()
   (or (config :htdocs)
-      (merge-pathnames #P"htdocs/" +app-root+)))
+      (merge-pathnames #P"static/" +app-root+)))
+
+(defun index-path ()
+  (or (config :index)
+      (merge-pathnames #P"index.html" +app-root+)))
 
 ;; Websocket close codes
 
@@ -226,24 +231,23 @@
           (spare-pieces (black-player game)) 1)
     (send-game-state session)))
 
-(defparameter +join-uri-scanner+
-  (cl-ppcre:create-scanner "^/join/([\\w]+)$"))
 
-(defun token-from-uri (uri)
+(defun token-from-uri (uri scanner)
   "Extract {token} from URI `/join/{token}'"
   (multiple-value-bind (scanned groups)
-    (cl-ppcre:scan-to-strings +join-uri-scanner+ uri)
+    (cl-ppcre:scan-to-strings scanner uri)
     (when scanned (aref groups 0))))
 
+(defparameter +websocket-uri-scanner+
+  (cl-ppcre:create-scanner "^/wss/sessions/([\\w]+)$"))
 (defun get-session-from-path (path-info)
   "Create a new session or join a preexisting session"
-  (let ((token (token-from-uri path-info)))
+  (let ((token (token-from-uri path-info +websocket-uri-scanner+)))
     (if-let (session (and token (find-session token)))
       session
       (start-session))))
 
 (defun websocket-app (env)
-  (print (list* :this-is-the-socket-env env))
   (let* ((ws (websocket-driver:make-server env))
          (client (make-instance 'client :ws ws))
          (session (get-session-from-path (getf env :path-info))))
@@ -259,26 +263,35 @@
 (defvar *website-handler* nil)
 
 (defun 404-server (env)
-  (print (list* :this-is-the-website-env env) *debug-io*)
+  (declare (ignore env))
   '(404 (:content-type "text/plain") ("Not Found.. doofus")))
 
-(defparameter *website-app*
+(defparameter +website-uri-scanner+
+  (cl-ppcre:create-scanner "^/join/([\\w]+)$"))
+(defparameter *app*
   (lack:builder
-    ;; Serve "/index.html" for "/"
+    ;; Serve "index.html" for "/"
     (lambda (app)
       (lambda (env)
-        (when (string= "/" (getf env :request-uri))
-          (setf env (copy-list env)
-                (getf env :path-info) "/index.html"))
-        (funcall app env)))
+        (let ((path-info (getf env :path-info)))
+          (if (or (null path-info)
+                  (string= "/" path-info))
+              `(200 (:content-type "text/html") ,(index-path))
+              (funcall app env)))))
     ;; Redirect "/join/{token}" to "/#/{token}"
     (lambda (app)
       (lambda (env)
-        (if-let (token (token-from-uri (getf env :request-uri)))
+        (if-let (token (token-from-uri (getf env :request-uri) +website-uri-scanner+))
           `(302 (:location ,(concatenate 'string "/#/" token)))
           (funcall app env))))
+    ;; Route "/wss/*" to websocket
+    (lambda (app)
+      (lambda (env)
+        (if (alexandria:starts-with-subseq "/wss" (getf env :request-uri))
+            (websocket-app env)
+            (funcall app env))))
     ;; Static Path
-    (:static :path "/" :root (static-root))
+    (:static :path "/static/" :root (static-path))
     ;; A 404 server that isn't run because :static takes over everything.
     '404-server))
 
@@ -289,11 +302,8 @@
 
 (defun start ()
   (stop)
-  (setf *ws-handler* (clack:clackup 'websocket-app
-                                    :port 8081
-                                    :server :hunchentoot)
-        *website-handler* (clack:clackup
-                            *website-app*
+  (setf *website-handler* (clack:clackup
+                            *app*
                             :port 8080
                             :server :hunchentoot))
   (values))
