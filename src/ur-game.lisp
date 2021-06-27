@@ -217,15 +217,6 @@
                          :op :err
                          :reason :no-such-operand)))))
 
-(defun set-deathmatch (session-token)
-  "For debugging end-game states. Given a session token, set the spare pieces
-   of both players to 1."
-  (let* ((session (find-session session-token))
-         (game (game session)))
-    (setf (spare-pieces (white-player game)) 1
-          (spare-pieces (black-player game)) 1)
-    (send-game-state session)))
-
 (defun session-app (env &optional token)
   (let* ((ws (websocket-driver:make-server env))
          (client (make-instance 'client :ws ws))

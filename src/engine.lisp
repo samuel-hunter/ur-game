@@ -11,12 +11,7 @@
            :offer-draw
 
            ;; TODO figure out how to make the app not care about whose turn it is.
-           :turn
-
-           ;; Exported only for debugging method `make-deathmatch'
-           :white-player
-           :black-player
-           :spare-pieces))
+           :turn))
 
 (in-package #:ur-game.engine)
 
