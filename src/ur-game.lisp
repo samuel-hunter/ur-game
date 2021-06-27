@@ -218,33 +218,18 @@
                          :reason :no-such-operand)))))
 
 (defun set-deathmatch (session-token)
-  "For debugging end-game states. Given a session token, set the spare pieces of both players to 1."
+  "For debugging end-game states. Given a session token, set the spare pieces
+   of both players to 1."
   (let* ((session (find-session session-token))
          (game (game session)))
     (setf (spare-pieces (white-player game)) 1
           (spare-pieces (black-player game)) 1)
     (send-game-state session)))
 
-
-(defun token-from-uri (uri scanner)
-  "Extract {token} from URI `/join/{token}'"
-  (multiple-value-bind (scanned groups)
-    (cl-ppcre:scan-to-strings scanner uri)
-    (when scanned (aref groups 0))))
-
-(defparameter +websocket-uri-scanner+
-  (cl-ppcre:create-scanner "^/wss/sessions/([\\w]+)$"))
-(defun get-session-from-path (path-info)
-  "Create a new session or join a preexisting session"
-  (let ((token (token-from-uri path-info +websocket-uri-scanner+)))
-    (if-let (session (and token (find-session token)))
-      session
-      (start-session))))
-
-(defun websocket-app (env)
+(defun session-app (env &optional token)
   (let* ((ws (websocket-driver:make-server env))
          (client (make-instance 'client :ws ws))
-         (session (get-session-from-path (getf env :path-info))))
+         (session (or (find-session token) (start-session))))
     (websocket-driver:on :open ws (curry 'handle-new-connection session client))
     (websocket-driver:on :message ws (curry 'handle-message session client))
     (websocket-driver:on :close ws (curry 'handle-close-connection session client))
@@ -253,44 +238,61 @@
       (declare (ignore responder))
       (websocket-driver:start-connection ws))))
 
-(defvar *website-handler* nil)
+(defun make-path-scanner (path-regex)
+  "Converts a path regex like /a/b/{something}/c into a regex that captures {...}'s and "
+  (let* ((query-replaced-paths (cl-ppcre:regex-replace-all
+                                 "{\\w*?}" path-regex "([^/]+?)"))
+         (total-path-only (concatenate 'string
+                                       "^" query-replaced-paths "$"))
+         (scanner (cl-ppcre:create-scanner total-path-only)))
+    (lambda (path-info)
+      (multiple-value-bind (scanned-p groups)
+        (cl-ppcre:scan-to-strings scanner path-info)
 
-(defun 404-server (env)
-  (declare (ignore env))
-  '(404 (:content-type "text/plain") ("Not Found.. doofus")))
+        (values scanned-p
+                (and groups (coerce groups 'list)))))))
 
-(defparameter +website-uri-scanner+
-  (cl-ppcre:create-scanner "^/join/([\\w]+)$"))
+(defun route (path-regex routed-app)
+  "Route call to another app on a matching path.
+
+   Paths with a `{...}` in them are read as parameters, and passed into the
+   routed app, e.g. an app routed by `/sessions/{token}` will be called with
+   the app env and the token."
+  (let ((scanner (make-path-scanner path-regex)))
+    (lambda (app)
+      (lambda (env)
+        (multiple-value-bind (match-p arguments)
+          (funcall scanner (getf env :path-info))
+
+          (if match-p
+              (apply routed-app env arguments)
+              (funcall app env)))))))
+
 (defparameter *app*
   (lack:builder
-    ;; Serve "index.html" for "/"
-    (lambda (app)
-      (lambda (env)
-        (let ((path-info (getf env :path-info)))
-          (if (or (null path-info)
-                  (string= "/" path-info))
-              `(200 (:content-type "text/html") ,+index-path+)
-              (funcall app env)))))
-    ;; Redirect "/join/{token}" to "/#/{token}"
-    (lambda (app)
-      (lambda (env)
-        (if-let (token (token-from-uri (getf env :request-uri) +website-uri-scanner+))
-          `(302 (:location ,(concatenate 'string "/#/" token)))
-          (funcall app env))))
-    ;; Route "/wss/*" to websocket
-    (lambda (app)
-      (lambda (env)
-        (if (alexandria:starts-with-subseq "/wss" (getf env :request-uri))
-            (websocket-app env)
-            (funcall app env))))
+    ;; === Websocket Routing ===
+    ;; Route /wss/sessions to new-session websocket
+    (route "/wss/sessions" 'session-app)
+    ;; Route /wss/sessions/{token} to join-session websocket
+    (route "/wss/sessions/{token}" 'session-app)
+    ;; === Website Routing ===
+    ;; Redirect /join/{token} to /#/{token}
+    (route "/join/{token}"
+           (lambda (env token)
+             (declare (ignore env))
+             `(302 (:location ,(concatenate 'string "/#/" token)))))
+    ;; Serve "index.html" for "/".
+    (route "/"
+           (constantly `(200 (:content-type "text/html") ,+index-path+)))
     ;; Static Path
     (:static :path "/static/" :root +static-path+)
-    ;; A 404 server that isn't run because :static takes over everything.
-    '404-server))
+    ;; All other routes are invalid.
+    (constantly '(404 (:content-type "text/plain") ("Not Found")))))
+
+(defvar *website-handler* nil)
 
 (defun start ()
   (when *website-handler* (clack:stop *website-handler*))
   (setf *website-handler* (clack:clackup *app*
-                            :port 8080
-                            :server :hunchentoot))
+                                         :server :hunchentoot))
   (values))
