@@ -7,17 +7,14 @@
   :version "0.0.1"
   :depends-on (#:alexandria
                #:cl-json
-               #:hunchentoot
-               #:hunchensocket
+               #:cl-ppcre
+               #:clack
+               #:websocket-driver
                #:uiop
                #:session-token)
 
   :pathname "src"
   :components ((:file "json")
-               (:file "engine" :depends-on ("json"))
+               (:file "engine")
                (:file "config")
-               (:file "ur-game" :depends-on ("engine" "config" "json")))
-
-  :build-operation "program-op"
-  :build-pathname "ur-game"
-  :entry-point "ur-game:main")
+               (:file "ur-game" :depends-on ("engine" "config" "json"))))

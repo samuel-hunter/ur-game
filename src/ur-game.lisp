@@ -6,6 +6,7 @@
   (:use :cl :ur-game.engine
         :ur-game.config :ur-game.json)
   (:import-from :alexandria
+                :curry
                 :when-let
                 :if-let
                 :switch
@@ -14,13 +15,11 @@
                 :encode-json-plist-to-string
                 :decode-json-from-string)
   (:export :start
-           :main
            :stop))
 
 (in-package #:ur-game)
 
-(defvar *http-acceptor* nil)
-(defvar *ws-acceptor* nil)
+;; File Paths
 
 (defparameter +app-root+
   (asdf:system-source-directory :ur-game))
@@ -29,12 +28,35 @@
   (or (config :htdocs)
       (merge-pathnames #P"htdocs/" +app-root+)))
 
-(defun index-root ()
-  (merge-pathnames #P"index.html" (static-root)))
+;; Websocket close codes
 
 (defconstant +ws-code-server-closed+ 1012)
 (defconstant +ws-code-opponent-disconnected+ 4000)
 (defconstant +ws-code-session-full+ 4002)
+
+(defclass session ()
+  ((game :initform nil :accessor game)
+   (token :initarg :token :reader token)
+   (clients :initform () :accessor clients)))
+
+(defun in-game-p (session)
+  (and (game session) t))
+
+(defun game-over-p (session)
+  (and (= 2 (length (clients session)))
+       (null (game session))))
+
+(defun session-full-p (session)
+  (>= (length (clients session)) 2))
+
+(defun add-client (session client)
+  "Attempt to add the client to the session, and return whether it was successful."
+  (if (session-full-p session)
+      (prog1 nil
+        (websocket-driver:close-connection
+          (ws client) "Session is already full" +ws-code-session-full+))
+      (prog1 t
+        (push client (clients session)))))
 
 ;; NOTE: The default generator from `session-token' grabs randomness
 ;; from /dev/urandom or /dev/arandom, and therefore doesn't work on
@@ -43,43 +65,52 @@
   (session-token:make-generator :token-length 10))
 
 (defvar *sessions* (make-hash-table :test 'equal)
-  "Hash of games fetched by their token.")
+  "Hash of sessions fetched by their token.")
+
+(defun start-session ()
+  (let* ((token (funcall *game-token-generator*))
+         (session (make-instance 'session :token token)))
+    (setf (gethash token *sessions*) session)
+    session))
 
 (defun find-session (token)
   (gethash token *sessions*))
 
-(defclass session (hunchensocket:websocket-resource)
-  ((game :accessor game)
-   (token :initarg :token :reader token))
-  (:default-initargs :client-class 'player))
+(defun stop-session (session reason &key (code 1000))
+  "Disconnect all clients and remove the game session from memory."
+  (loop :for client :in (clients session)
+        :do (websocket-driver:close-connection (ws client) reason code))
+  (remhash (token session) *sessions*)
+  (format t "Stopping game ~A: ~A~%" (token session) reason))
 
-(defun in-game-p (session)
-  (if (game session) t nil))
-
-(defun game-over-p (session)
-  (and (= 2 (length (hunchensocket:clients session)))
-       (null (game session))))
-
-(defun session-full-p (session)
-  (>= (length (hunchensocket:clients session)) 2))
+(defclass client ()
+  ((color :accessor color)
+   (ws :initarg :ws :accessor ws)))
 
 (defun client-turn-p (session client)
   "Return whether it is the client player's turn"
   (eq (turn (game session)) (color client)))
 
-(defun stop-session (session reason &key (status 1000))
-  "Disconnect all clients and remove the game session from memory."
-  (loop :for client :in (hunchensocket:clients session)
-        :do (hunchensocket:close-connection client :reason reason :status status))
-  (remhash (token session) *sessions*)
-  (format t "Stopping game ~A: ~A~%" (token session) reason))
+(defun send-message (client message)
+  "Send a message to one client."
+  (pprint (list :sending :client client :message message))
+  (websocket-driver:send-text
+    (ws client) (encode-json-plist-to-string message)))
 
-(defclass player (hunchensocket:websocket-client)
-  ((color :accessor color)))
+(defun send-message* (client &rest message)
+  (send-message client message))
+
+(defun broadcast-message (session message)
+  "Send a message to all clients."
+  (loop :for client :in (clients session)
+        :do (send-message client message)))
+
+(defun broadcast-message* (session &rest message)
+  (broadcast-message session message))
 
 (defun start-game (session)
   (setf (game session) (make-instance 'game))
-  (let ((clients (alexandria:shuffle (hunchensocket:clients session))))
+  (let ((clients (alexandria:shuffle (clients session))))
     (setf (color (first clients)) :white
           (color (second clients)) :black)
     (dolist (client clients)
@@ -95,41 +126,30 @@
                       :game (game session))
   (setf (game session) nil))
 
-(defun send-message (client message)
-  "Send a message to one client."
-  (pprint (list :sending :client client :message message))
-  (hunchensocket:send-text-message
-    client (encode-json-plist-to-string message)))
+(defun handle-new-connection (session client)
+  (unless (add-client session client)
+    (return-from handle-new-connection))
 
-(defun send-message* (client &rest message)
-  (send-message client message))
-
-(defun broadcast-message (session message)
-  "Send a message to all clients."
-  (loop :for client :in (hunchensocket:clients session)
-        :do (send-message client message)))
-
-(defun broadcast-message* (session &rest message)
-  (broadcast-message session message))
-
-(defmethod hunchensocket:client-connected ((session session) client)
-  (if (= 1 (length (hunchensocket:clients session)))
+  (if (session-full-p session)
+      (start-game session)
       (send-message* client
-                      :op :game-token
-                      :token (token session))
-      (start-game session)))
+                     :op :game-token
+                     :token (token session))))
 
-(defmethod hunchensocket:client-disconnected ((session session) client)
-  ;; TODO see if (stop-sesion) disconnecting clients manually triggers this event.
-  (stop-session session "Opponent disconnected" :status +ws-code-opponent-disconnected+))
+(defun handle-close-connection (session client &key code reason)
+  (declare (ignore client code reason))
+  ;; TODO see if (stop-session) disconnecting clients manually triggers this event.
+  ;; TODO maybe maintain a session until it has 0 clients.
+  (stop-session session "Opponent disconnected"
+                :code +ws-code-opponent-disconnected+))
 
 ;; text-message-received helper function
-(defun send-game-state (game-session)
-  (broadcast-message* game-session
+(defun send-game-state (session)
+  (broadcast-message* session
                       :op :game-state
-                      :game (game game-session)))
+                      :game (game session)))
 
-(defmethod hunchensocket:text-message-received ((session session) client message)
+(defun handle-message (session client message)
   (let* ((message (decode-json-from-string message))
          (operand (cdr (assoc :op message)))
          (game (game session)))
@@ -198,13 +218,13 @@
                          :op :err
                          :reason :no-such-operand)))))
 
-(defun new-game-dispatcher (request)
-  (when (string= (hunchentoot:script-name request) "/new")
-    (let* ((token (funcall *game-token-generator*))
-           (session (make-instance 'session :token token)))
-      (setf (gethash token *sessions*) session)
-      (format t "Created a new game ~A~%" token)
-      session)))
+(defun set-deathmatch (session-token)
+  "For debugging end-game states. Given a session token, set the spare pieces of both players to 1."
+  (let* ((session (find-session session-token))
+         (game (game session)))
+    (setf (spare-pieces (white-player game)) 1
+          (spare-pieces (black-player game)) 1)
+    (send-game-state session)))
 
 (defparameter +join-uri-scanner+
   (cl-ppcre:create-scanner "^/join/([\\w]+)$"))
@@ -215,66 +235,65 @@
     (cl-ppcre:scan-to-strings +join-uri-scanner+ uri)
     (when scanned (aref groups 0))))
 
-(defun join-game-dispatcher (request)
-  (when-let (token (token-from-uri (hunchentoot:script-name request)))
-    (when-let (session (find-session token))
-      (unless (session-full-p session)
-        session))))
+(defun get-session-from-path (path-info)
+  "Create a new session or join a preexisting session"
+  (let ((token (token-from-uri path-info)))
+    (if-let (session (and token (find-session token)))
+      session
+      (start-session))))
 
-(defun invite-link-dispatcher (request)
-  (print (hunchentoot:script-name request))
-  (when-let (token (token-from-uri (hunchentoot:script-name request)))
-    (print :found)
-    (hunchentoot:redirect (concatenate 'string "/#/" token))))
+(defun websocket-app (env)
+  (print (list* :this-is-the-socket-env env))
+  (let* ((ws (websocket-driver:make-server env))
+         (client (make-instance 'client :ws ws))
+         (session (get-session-from-path (getf env :path-info))))
+    (websocket-driver:on :open ws (curry 'handle-new-connection session client))
+    (websocket-driver:on :message ws (curry 'handle-message session client))
+    (websocket-driver:on :close ws (curry 'handle-close-connection session client))
 
-(defun stop-acceptor (acceptor)
-  "Stop the acceptor if possible."
-  (when (and acceptor (hunchentoot:started-p acceptor))
-    (hunchentoot:stop acceptor)))
+    (lambda (responder)
+      (declare (ignore responder))
+      (websocket-driver:start-connection ws))))
+
+(defvar *ws-handler* nil)
+(defvar *website-handler* nil)
+
+(defun 404-server (env)
+  (print (list* :this-is-the-website-env env) *debug-io*)
+  '(404 (:content-type "text/plain") ("Not Found.. doofus")))
+
+(defparameter *website-app*
+  (lack:builder
+    ;; Serve "/index.html" for "/"
+    (lambda (app)
+      (lambda (env)
+        (when (string= "/" (getf env :request-uri))
+          (setf env (copy-list env)
+                (getf env :path-info) "/index.html"))
+        (funcall app env)))
+    ;; Redirect "/join/{token}" to "/#/{token}"
+    (lambda (app)
+      (lambda (env)
+        (if-let (token (token-from-uri (getf env :request-uri)))
+          `(302 (:location ,(concatenate 'string "/#/" token)))
+          (funcall app env))))
+    ;; Static Path
+    (:static :path "/" :root (static-root))
+    ;; A 404 server that isn't run because :static takes over everything.
+    '404-server))
 
 (defun stop ()
-  "Close all sessions and stop all acceptors."
-  (maphash (lambda (key game)
-             (remhash key *sessions*)
-             (stop-session game "Server closed" :status +ws-code-server-closed+))
-           *sessions*)
-  (setf *sessions* (make-hash-table :test 'equal))
-  (values (stop-acceptor *http-acceptor*)
-          (stop-acceptor *ws-acceptor*)))
+  (when *ws-handler* (clack:stop *ws-handler*))
+  (when *website-handler* (clack:stop *website-handler*))
+  (values))
 
-(defun set-deathmatch (session-token)
-  "For debugging end-game states. Given a session token, set the spare pieces of both players to 1."
-  (let* ((session (find-session session-token))
-         (game (game session)))
-    (setf (spare-pieces (white-player game)) 1
-          (spare-pieces (black-player game)) 1)
-    (send-game-state session)))
-
-(defun start (&key (http-port (config :http-port)) (ws-port (config :ws-port)))
+(defun start ()
   (stop)
-
-  (setf hunchentoot:*dispatch-table*
-        (list (hunchentoot:create-static-file-dispatcher-and-handler "/" (index-root))
-              'invite-link-dispatcher
-              (hunchentoot:create-folder-dispatcher-and-handler "/" (static-root)))
-        hunchensocket:*websocket-dispatch-table*
-        (list 'new-game-dispatcher
-              'join-game-dispatcher))
-
-  (unless *http-acceptor*
-    (setf *http-acceptor*
-          (make-instance 'hunchentoot:easy-acceptor :port http-port)))
-  (unless *ws-acceptor*
-    (setf *ws-acceptor*
-          (make-instance 'hunchensocket:websocket-acceptor :port ws-port)))
-
-  (values (hunchentoot:start *http-acceptor*)
-          (hunchentoot:start *ws-acceptor*)))
-
-(defun main ()
-  "Start the server as a compiled binary."
-  (format t "Starting the Royal Game of Ur...~%")
-  (start)
-  (loop for thread in (remove-if (lambda (x) (eq x (bordeaux-threads:current-thread)))
-                                 (bordeaux-threads:all-threads))
-       do (bordeaux-threads:join-thread thread)))
+  (setf *ws-handler* (clack:clackup 'websocket-app
+                                    :port 8081
+                                    :server :hunchentoot)
+        *website-handler* (clack:clackup
+                            *website-app*
+                            :port 8080
+                            :server :hunchentoot))
+  (values))
