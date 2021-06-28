@@ -47,10 +47,10 @@
                  :accessor draw-offered)))
 
 (defclass game ()
-  ((white :initform (make-instance 'player)
-          :reader white-player)
-   (black :initform (make-instance 'player)
+  ((black :initform (make-instance 'player)
           :reader black-player)
+   (white :initform (make-instance 'player)
+          :reader white-player)
    (shared-path :initform (make-empty-path +shared-length+)
                 :accessor shared-path)
    (turn :initform :white
@@ -62,9 +62,21 @@
 ;; TODO figure out how to separate this last piece of presentation from the
 ;; game engine.
 (defmethod json:encode-json ((object game) &optional (stream json:*json-output*))
-  (json:with-object (stream)
-    (dolist (slot '(white black shared-path turn last-roll))
-      (json:encode-object-member slot (slot-value object slot) stream))))
+  (with-slots (black white shared-path turn last-roll) object
+    (let ((json:*json-output* stream))
+      (json:with-object ()
+        (json:as-object-member (:board)
+          (json:with-object ()
+            (json:encode-object-member :black-start (start-path black))
+            (json:encode-object-member :white-start (start-path white))
+            (json:encode-object-member :shared-middle shared-path)
+            (json:encode-object-member :black-end (end-path black))
+            (json:encode-object-member :white-end (end-path white))))
+
+        (json:encode-object-member :black-spares (spare-pieces black))
+        (json:encode-object-member :white-spares (spare-pieces white))
+        (json:encode-object-member :turn turn)
+        (json:encode-object-member :last-roll last-roll)))))
 
 (defun opponent-color (color)
   (ecase color

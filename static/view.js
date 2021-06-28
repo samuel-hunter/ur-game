@@ -142,21 +142,18 @@ var view = {};
   // Repopulare the board with the appropriate pieces
   function updateBoard() {
     clearBoard()
-    for (let color of ['black', 'white']) {
-      // Populate player's starting path
-      for (let i = 0; i < 4; i++) {
-        if (model.gameState[color].startPath[i] === color)
-          addPiece(color, i+1)
-      }
+    let board = model.gameState.board
 
-      // Populate player's ending path
-      for (let i = 0; i < 2; i++) {
-        if (model.gameState[color].endPath[i] === color)
-          addPiece(color, i+13)
-      }
+    function populateRoute(route, offset) {
+      route.forEach((owner, idx) => {
+        if (owner !== 'none') {
+          addPiece(owner, idx + offset)
+        }
+      })
+    }
 
-      // Populate the player's spare pieces
-      let amnt = model.gameState[color].sparePieces
+    function populateSpares(color) {
+      let amnt = model.gameState[color + 'Spares']
       let piecePool = document.getElementById(model.colorToPlayer(color) + '-pool')
       piecePool.innerHTML = ''
       for (var i = 0; i < amnt; i++) {
@@ -165,12 +162,14 @@ var view = {};
       }
     }
 
-    // Populare the game board's shared path
-    for (let i = 0; i < 8; i++) {
-      if (model.gameState.sharedPath[i] !== 'none')
-        addPiece(model.gameState.sharedPath[i], i+5)
-    }
+    populateRoute(board.blackStart, 1)
+    populateRoute(board.whiteStart, 1)
+    populateRoute(board.sharedMiddle, 5)
+    populateRoute(board.blackEnd, 13)
+    populateRoute(board.whiteEnd, 13)
 
+    populateSpares('black')
+    populateSpares('white')
   }
 
   // Clear and repopulate the dice pool with a list of dice results
