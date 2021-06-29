@@ -108,7 +108,7 @@
   (broadcast-message session message))
 
 (defun start-game (session)
-  (setf (game session) (make-instance 'game))
+  (setf (game session) (make-game))
   (let ((clients (alexandria:shuffle (clients session))))
     (setf (color (first clients)) :white
           (color (second clients)) :black)

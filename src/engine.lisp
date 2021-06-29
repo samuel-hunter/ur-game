@@ -3,6 +3,7 @@
   (:import-from :alexandria
                 :switch)
   (:export :game
+           :make-game
            :winner
 
            ;; Game actions
@@ -20,59 +21,143 @@
 
 ;; path lengths
 (defparameter +start-length+ 4)
-(defparameter +shared-length+ 8)
+(defparameter +middle-length+ 8)
 (defparameter +end-length+ 2)
-
-(defparameter +path-length+ (+ +start-length+ +shared-length+ +end-length+))
+(defparameter +path-length+
+  (+ +start-length+ +middle-length+ +end-length+))
 
 (defparameter +starting-pieces+ 7)
-
 
 ;; Rosette tiles protect pieces from battle and give the player a
 ;; second turn
 (defparameter +rosettes+ '(4 8 14))
+
+;; Board Data
+(defclass path-segment ()
+  ((tile-vector :initarg :tile-vector :reader tile-vector)
+   (black-next :initarg :black-next :reader black-next)
+   (white-next :initarg :white-next :reader white-next)))
+
+(defun next-segment (path-segment color)
+  (ecase color
+    (:black (black-next path-segment))
+    (:white (white-next path-segment))))
+
+(defun route-length (path-segment color)
+  (loop :for segment := path-segment :then (next-segment segment color)
+        :while segment
+        :sum (length (tile-vector segment))))
+
+(defun find-tile-vector (n path-segment color)
+  (when (null path-segment)
+    (return-from find-tile-vector nil))
+
+  (let* ((tile-vector (tile-vector path-segment))
+         (length (length tile-vector)))
+    (if (< n length)
+        (values tile-vector n)
+        (find-tile-vector (- n length)
+                          (next-segment path-segment color)
+                          color))))
+
+(defun nth-tile (n path-segment color)
+  (multiple-value-bind (vector relative-n)
+    (find-tile-vector n path-segment color)
+
+    (when vector
+      (aref vector relative-n))))
+
+(defun (setf nth-tile) (new-value n path-segment color)
+  (multiple-value-bind (vector relative-n)
+    (find-tile-vector n path-segment color)
+
+    (when vector
+      (setf (aref vector relative-n) new-value))))
+
+(defun route-tiles (path-segment color)
+  (loop :for segment := path-segment :then (next-segment segment color)
+        :while segment
+        :collect (tile-vector segment) :into vectors
+        :finally (return (apply #'concatenate 'vector vectors))))
+
+(defclass board ()
+  ((black-start :initarg :black-start)
+   (white-start :initarg :white-start)
+   (shared-middle :initarg :shared-middle)
+   (black-end :initarg :black-end)
+   (white-end :initarg :white-end)))
+
+(defun make-tile-vector (length)
+  (make-array length :initial-element :none))
+
+(defun make-board-and-paths ()
+  "Return three values: the game board, the black starting path segment, and
+   the white starting path segment."
+  (let* ((black-start (make-tile-vector +start-length+))
+         (white-start (make-tile-vector +start-length+))
+         (shared-middle (make-tile-vector +middle-length+))
+         (black-end (make-tile-vector +end-length+))
+         (white-end (make-tile-vector +end-length+))
+
+         (shared-path-segment
+           (make-instance 'path-segment
+                          :tile-vector shared-middle
+                          :black-next (make-instance 'path-segment
+                                                     :tile-vector black-end)
+                          :white-next (make-instance 'path-segment
+                                                     :tile-vector white-end))))
+    (values (make-instance 'board
+                           :black-start black-start
+                           :white-start white-start
+                           :shared-middle shared-middle
+                           :black-end black-end
+                           :white-end white-end)
+            (make-instance 'path-segment
+                           :tile-vector black-start
+                           :black-next shared-path-segment)
+            (make-instance 'path-segment
+                           :tile-vector white-start
+                           :white-next shared-path-segment))))
 
 (defun rosettep (index)
   "Return whether the tile has a rosette"
   (member index +rosettes+))
 
 (defclass player ()
-  ((start-path :initform (make-empty-path +start-length+)
-               :accessor start-path)
-   (end-path :initform (make-empty-path +end-length+)
-             :accessor end-path)
+  ((start-path :initarg :start-path
+               :reader start-path)
    (spare-pieces :initform +starting-pieces+
                  :accessor spare-pieces)
    (draw-offered :initform nil
                  :accessor draw-offered)))
 
 (defclass game ()
-  ((black :initform (make-instance 'player)
+  ((random-state :initform (make-random-state t))
+   (black :initarg :black
           :reader black-player)
-   (white :initform (make-instance 'player)
+   (white :initarg :white
           :reader white-player)
-   (shared-path :initform (make-empty-path +shared-length+)
-                :accessor shared-path)
+   (board :initarg :board
+          :reader board)
    (turn :initform :white
          :accessor turn)
-   (random-state :initform (make-random-state t))
    (last-roll :initform nil
               :accessor last-roll)))
+
+(defun make-game ()
+  (multiple-value-bind (board black-path white-path) (make-board-and-paths)
+    (make-instance 'game
+                   :black (make-instance 'player :start-path black-path)
+                   :white (make-instance 'player :start-path white-path)
+                   :board board)))
 
 ;; TODO figure out how to separate this last piece of presentation from the
 ;; game engine.
 (defmethod json:encode-json ((object game) &optional (stream json:*json-output*))
-  (with-slots (black white shared-path turn last-roll) object
+  (with-slots (black white board shared-path turn last-roll) object
     (let ((json:*json-output* stream))
       (json:with-object ()
-        (json:as-object-member (:board)
-          (json:with-object ()
-            (json:encode-object-member :black-start (start-path black))
-            (json:encode-object-member :white-start (start-path white))
-            (json:encode-object-member :shared-middle shared-path)
-            (json:encode-object-member :black-end (end-path black))
-            (json:encode-object-member :white-end (end-path white))))
-
+        (json:encode-object-member :board board)
         (json:encode-object-member :black-spares (spare-pieces black))
         (json:encode-object-member :white-spares (spare-pieces white))
         (json:encode-object-member :turn turn)
@@ -101,43 +186,16 @@
       :move-phase
       :roll-phase))
 
-(defun player-tile (game index)
-  "Return ownership of the player's effective tile by index."
-
+(defun active-player-tile (game index)
+  "Return ownership of the active player's effective tile by index."
   (decf index) ; 1-based; playing from tile 0 means placing a new piece on the table.
+  (nth-tile index (start-path (active-player game)) (turn game)))
 
-  (let ((player (active-player game))
-        (shared-index (- index +start-length+))
-        (end-index (- index +start-length+ +shared-length+)))
-    (cond
-      ;; Return from the players' starting path if within its range
-      ((< index +start-length+)
-       (aref (start-path player) index))
-      ;; Otherwise, return from the shared path if within +that+ range
-      ((< shared-index +shared-length+)
-       (aref (shared-path game) shared-index))
-      ;; Finally, the ending path is the last portion, so alway fall back to
-      ;; accessing from here.
-    (t (aref (end-path player) end-index)))))
-
-(defun (setf player-tile) (new-owner game index)
-  "Set the ownership of the player's effective tile by index."
-
+(defun (setf active-player-tile) (new-value game index)
+  "Set the ownership of the active player's effective tile by index."
   (decf index) ; 1-based; playing from tile 0 means placing a new piece on the table.
-
-  (let ((player (active-player game))
-        (shared-index (- index +start-length+))
-        (end-index (- index +start-length+ +shared-length+)))
-    (cond
-      ;; Return from the players' starting path if within its range
-      ((< index +start-length+)
-       (setf (aref (start-path player) index) new-owner))
-      ;; Otherwise, return from the shared path if within +that+ range
-      ((< shared-index +shared-length+)
-       (setf (aref (shared-path game) shared-index) new-owner))
-      ;; Finally, the ending path is the last portion, so alway fall back to
-      ;; accessing from here.
-      (t (setf (aref (end-path player) end-index) new-owner)))))
+  (setf (nth-tile index (start-path (active-player game)) (turn game))
+        new-value))
 
 (defun valid-move (game index)
   "Return two values: Whether the move is valid, and the type of move."
@@ -150,10 +208,10 @@
         ((< index 0) (values nil :bad-tile))
         ((and (zerop index) (zerop (spare-pieces (active-player game)))) (values nil :no-spare-pieces))
         ((> dest-index (1+ +path-length+)) (values nil :too-far))
-        ((and (> index 0) (not (eq (player-tile game index) turn))) (values nil :unowned-tile))
+        ((and (> index 0) (not (eq (active-player-tile game index) turn))) (values nil :unowned-tile))
         ((= dest-index (1+ +path-length+)) (values t :completed-piece))
-        ((eq (player-tile game dest-index) turn) (values nil :cant-capture-own-tile))
-        ((eq (player-tile game dest-index) :none) (values t (if (rosettep dest-index)
+        ((eq (active-player-tile game dest-index) turn) (values nil :cant-capture-own-tile))
+        ((eq (active-player-tile game dest-index) :none) (values t (if (rosettep dest-index)
                                                                 :landed-on-rosette
                                                                 :moved-piece)))
         ((rosettep dest-index) (values nil :protected-tile))
@@ -165,19 +223,14 @@
      :when (valid-move game index) :do (return t)))
 
 (defun player-tiles (game color)
-  "Return a vector of all the players' tiles"
-  (let ((player (game-player game color)))
-    (concatenate 'vector
-                 (start-path player)
-                 (shared-path game)
-                 (end-path player))))
+  (route-tiles  (start-path (game-player game color))
+                color))
 
 (defun winner (game)
   "Return the game winner's color, or NIL if the game is still ongoing."
   (flet ((is-player-empty (player)
            (loop :for tile :across (player-tiles game player)
-              :when (eq tile player) :do (return nil)
-              :finally (return t))))
+                 :never (eq tile player))))
     (cond
       ((and (zerop (spare-pieces (white-player game)))
             (is-player-empty :white))
@@ -234,12 +287,12 @@
     (let ((dest-index (+ index last-roll)))
       (if (= index 0)
           (decf (spare-pieces (active-player game)))
-          (setf (player-tile game index) :none))
+          (setf (active-player-tile game index) :none))
 
       (when (<= dest-index +path-length+)
-        (when (eq (player-tile game dest-index) (opponent-color (turn game)))
+        (when (eq (active-player-tile game dest-index) (opponent-color (turn game)))
           (incf (spare-pieces (opponent-player game))))
-        (setf (player-tile game dest-index) turn))
+        (setf (active-player-tile game dest-index) turn))
       dest-index)))
 
 (defun make-move (game position)

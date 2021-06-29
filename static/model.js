@@ -26,7 +26,7 @@ var model = {
     return (color === 'black') ? 'white' : 'black'
   }
 
-  // TODO this and the following functions are game logic. Delegate that to the
+  // TODO This and the following functions are game logic. Delegate that to the
   // backend engine.
   model.tileOwner = function tileOwner(color, position) {
     let board = model.gameState.board
