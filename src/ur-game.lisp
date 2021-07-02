@@ -18,6 +18,10 @@
 
 (in-package #:ur-game)
 
+;; Logging (TODO: set level in configuration.)
+
+(vom:config :ur-game :debug)
+
 ;; File Paths
 
 (defparameter +app-root+
@@ -77,10 +81,10 @@
 
 (defun stop-session (session reason &key (code 1000))
   "Disconnect all clients and remove the game session from memory."
+  (vom:notice "Stopping game ~A: ~A" (token session) reason)
   (loop :for client :in (clients session)
         :do (websocket-driver:close-connection (ws client) reason code))
-  (remhash (token session) *sessions*)
-  (format t "Stopping game ~A: ~A~%" (token session) reason))
+  (remhash (token session) *sessions*))
 
 (defclass client ()
   ((color :accessor color)
@@ -92,7 +96,7 @@
 
 (defun send-message (client message)
   "Send a message to one client."
-  (pprint (list :sending :client client :message message))
+  (vom:debug "~S" (list :sending :client (ws client) :message message))
   (websocket-driver:send-text
     (ws client) (encode-json-plist-to-string message)))
 
@@ -152,7 +156,7 @@
   (let* ((message (decode-json-from-string message))
          (operand (cdr (assoc :op message)))
          (game (game session)))
-    (pprint (list :received :client client :message message))
+    (vom:debug "~S" (list :received :client client :message message))
     (switch (operand :test #'string-equal)
       ("heartbeat" (send-message* client :op :ack))
       ("message" (broadcast-message* session
@@ -259,8 +263,21 @@
               (apply routed-app env arguments)
               (funcall app env)))))))
 
+(defun peek-request (peeking-app)
+  (lambda (app)
+    (lambda (env)
+      (funcall peeking-app env)
+      (funcall app env))))
+
 (defparameter *app*
   (lack:builder
+    ;; === Middlewares ===
+    (peek-request
+      (lambda (env)
+        (vom:debug "~A ~S from ~A"
+                   (getf env :request-method)
+                   (getf env :request-uri)
+                   (getf env :remote-addr))))
     ;; === Websocket Routing ===
     ;; Route /wss/sessions to new-session websocket
     (route "/wss/sessions" 'session-app)

@@ -9,9 +9,10 @@
                #:cl-json
                #:cl-ppcre
                #:clack
-               #:websocket-driver
+               #:session-token
                #:uiop
-               #:session-token)
+               #:vom
+               #:websocket-driver)
 
   :pathname "src"
   :components ((:file "json")
