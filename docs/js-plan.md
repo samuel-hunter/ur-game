@@ -96,3 +96,9 @@ These events are specifically for the API as it is right now.
 
 ### rematch
 - Deprecated
+
+## Controller functions
+
+The Controller exposes a function for each request, and that should be about
+it. It's the View's main responsibility for providing the information favorable
+for the controller. The Controller doesn't want to know what a DOM is.

@@ -21,10 +21,13 @@ As part of reaching HAL, server events will try to provide hypermedia controls
 within their messages to promote the self-discovery that RESTful glory
 advertises.
 
+Finally, beyond requests and events, the server will also send occasional
+WebSocket ping frames.
+
 ## Endpoint
 
-The endpoint to create a new session is `wss://$host/sessions/new`. Endpoints
-to join preexisting sessions are provided by the Session Join event.
+The endpoint to create a new session is `wss://$host/ws/sessions`. Endpoints to
+join preexisting sessions are in the form `wss://$host/ws/sessions/:token`.
 
 ## Requests
 
@@ -35,14 +38,14 @@ contains a URI, and may have additional fields depending on the request:
 { "request": "$uri" }
 ```
 
-The URI's will be provided by the server, and it's recommended that the client
-uses those instead of hardcoded URI's.
+The URI's will be provided by the server, and it's strongly recommended that
+the client uses those instead of hardcoded URI's.
 
-### Heartbeat
+### Game Board
 
-A heartbeat tells the server it's alive. It's recommended for now to make this
-request about every 5 seconds. The server should automatically disconnect a
-client that doesn't respond after about 30 seconds:
+Request for the board resource. Hypermedia control reveals itself on in-game
+events as the `board` relation, or within `board` resources as the `self`
+relation:
 
 ```json
 { "request": "$uri" }
@@ -50,7 +53,9 @@ client that doesn't respond after about 30 seconds:
 
 ### Game State
 
-Request for the game state.
+Request for the current state of the game. Hypermedia control reveals itself on
+in-game events as the `game` relation, or within `game` resources as the `self`
+relation:
 
 ```json
 { "request": "$uri" }
@@ -58,7 +63,8 @@ Request for the game state.
 
 ### Roll
 
-Request for the client's payer to roll the dice:
+Request for the client's payer to roll the dice. Hypermedia control reveals
+itself on game resources as the `roll` relation:
 
 ```json
 { "request": "$uri" }
@@ -66,19 +72,22 @@ Request for the client's payer to roll the dice:
 
 ### Move
 
-Request for the client's player to move from a specific position. Postion 0 is
-from the spare pile, and positions 1 onward is from the board itself:
+Request for the client player's piece to move from a specific grid position.
+The position is either `"pool"`, to indicate to move from the player pool, or
+an array of two integers to indicate a zero-based grid position. Hypermedia
+control reveals itself on game resources as the `move` relation:
 
 ```json
 {
 	"request": "$uri",
-	"position": integer
+	"position": gridPosition
 }
 ```
 
 ### Draw
 
-Offer a draw to the opponent player:
+Offer a draw to the opponent player. Hypermedia control reveals itself on game
+resources as the `draw` relation:
 
 ```json
 { "request": "$uri" }
@@ -86,7 +95,8 @@ Offer a draw to the opponent player:
 
 ### Rematch
 
-Request rematch for the opponent player:
+Request rematch for the opponent player. Hypermedia control reveals itself on
+game resources as the `rematch` relation:
 
 ```json
 { "request": "$uri" }
@@ -94,15 +104,17 @@ Request rematch for the opponent player:
 
 ### Forfeit
 
-Request the client's player forefiets the game:
+Request the client's player forfeits the game. Hypermedia control reveals
+itself on game resources as the `forfeit` relation:
 
 ```json
 { "request": "$uri" }
 ```
 
-### Message
+### Chat
 
-Request to send a message:
+Request to send a chat message. Hypermedia control reveals itself on in-session
+events as the `chat` relation:
 
 ```json
 {
@@ -127,7 +139,7 @@ like:
 	"event": "$uri",
 	// some event data...
 	"_links": {
-		"message": "$uri",
+		"chat": "$uri",
 		"game": "$uri"
 	},
 	// The Game resource is usually embedded if the event changes the game state.
@@ -135,6 +147,7 @@ like:
 		"game": {
 			"_links": {
 				"self": {"href": "$uri"},
+				"board": {"href": "$uri"},
 				"roll": {"href": "$uri"},
 				"draw": {"href": "$uri"},
 				"forfeit": {"href": "$uri"}
@@ -149,8 +162,7 @@ like:
 of the links may be hidden in an individual control depending on whether the
 client is forbidden from making that request. The fields are:
 
-- `heartbeat`
-- `message`
+- `chat`
 - `rematch`
 
 ### The Game Resource and Hypermedia Controls
@@ -163,23 +175,16 @@ state of the game).
 {
 	"_links": {
 		"self": {"href": "$uri"},
+		"board": {"href": "$uri"},
 		"roll": {"href": "$uri"},
 		"move": {"href": "$uri"},
 		"draw": {"href": "$uri"},
 		"rematch": {"href": "$uri"},
 		"forfeit": {"href": "$uri"}
 	},
-	"black": {
-		"startPath": [ "$space", "$space", "$space", "$space" ],
-		"endPath": [ "$space", "$space" ],
-		"sparePieces": integer
-	},
-	"white": {
-		"startPath": [ "$space", "$space", "$space", "$space" ],
-		"endPath": [ "$space", "$space" ],
-		"sparePieces": integer
-	},
-	"sharedPath": [ "$space", "$space", "$space", "$space", "$space", "$space", "$space", "$space" ],
+	"boardPieces": [ [ "$space", ... ], ... ]
+	"blackPool": integer,
+	"whitePool": integer,
 	"lastRoll": roll,
 	"turn": "$player"
 }
@@ -189,19 +194,26 @@ state of the game).
 be a player or `none`. A `roll` may either be `null` or an array of `1` or
 `0` values.)
 
-### Ack
+### The Board Resource and Hypermedia Controls
 
-Acknowledges a heartbeat message:
+The Board resource holds `nrows` and `ncolumns` integer fields, and a 2D array of tiles:
 
 ```json
 {
-	"event": "/ack",
-	"_links": { ... }
+	"_links": {
+		"self": {"href": "$uri"}
+	},
+	"nrows": integer,
+	"ncolumns": integer,
+	"rows": [ [ "$tile", ... ], ... ]
+}
 ```
+
+A `$tile` for the time being can be either `empty`, `normal`, or `rosette`.
 
 ### Session Join
 
-Sent on connection when the client join a session. If the client is the only
+Sent on connection when the client joins a session. If the client is the only
 one in the session, provides a URL for another client to join:
 
 ```json
@@ -337,7 +349,9 @@ skipped turn. Embeds the Game resource:
 
 ### Move
 
-Indicates the turn-controlling player moved. `moveType` describes the type of move made. `endedTurn` indicates whether the move ends the current turn. Embeds the Game resource:
+Indicates the turn-controlling player moved. `moveType` describes the type of
+move made. `endedTurn` indicates whether the move ends the current turn. Embeds
+the Game resource:
 
 ```
 {
