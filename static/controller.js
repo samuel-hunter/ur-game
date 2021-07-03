@@ -1,4 +1,8 @@
-/* global model, view, WebSocket */
+/* global model, view, WebSocket
+ *
+ * Controller - Handle callbacks from the UI and manages the game server
+ * connection
+ */
 
 let controller = {};
 
@@ -7,24 +11,30 @@ let controller = {};
   let webSocket
 
   const socketCodeOpponentDisconnected = 4000
+  const socketCodeSessionFull = 4002
 
 
   // Send a message to the game server
-  function sendGameMessage(data) {
+  function send(operand, data) {
+    let message = Object.assign({op: operand}, data)
+
     // Heartbeat messages are annoying; don't print them out
-    if (data.op !== 'heartbeat') {
-      console.log({message: 'sending', data: data})
+    if (operand !== 'heartbeat') {
+      console.log('sending', message)
     }
-    webSocket.send(JSON.stringify(data))
+
+    webSocket.send(JSON.stringify(message))
+  }
+
+  // Return a function that sends an operand-only message.
+  function simpleMessageCommand(operand) {
+    return function sendSimpleMessage() {
+      send(operand)
+    }
   }
 
   controller.movePiece = function movePiece(position) {
-    if (model.gameState.lastRoll === null) return
-    if (model.gameState.turn !== model.playerColor) return
-
-    if (!model.isValidDestination(position + model.gameState.lastRoll)) return
-
-    sendGameMessage({op: 'move', position: position})
+    send('move', {position: position})
   }
 
   controller.sendComment = function sendComment() {
@@ -32,36 +42,28 @@ let controller = {};
     let comment = commentElem.value.trim()
 
     // Comment only when meaningful text is included
-    if (comment !== '') {
-      sendGameMessage({op: 'message', message: comment})
-    }
+    if (comment !== '')
+      send('message', {message: comment})
 
     commentElem.value = ''
   }
 
   // Roll the dice. Called by #roll-button
   controller.roll = function roll() {
+    /// XXX tight coupling between controller and view
     document.getElementById('roll-button').disabled = true
-    sendGameMessage({op: 'roll'})
+    send('roll')
   }
 
-  controller.offerDraw = function offerDraw() {
-    sendGameMessage({op: 'draw'})
-  }
-
-  controller.forfeit = function forfeit() {
-    sendGameMessage({op: 'forfeit'})
-  }
-
-  controller.rematch = function rematch() {
-    sendGameMessage({op: 'rematch'})
-  }
+  controller.offerDraw = simpleMessageCommand('draw')
+  controller.forfeit = simpleMessageCommand('forfeit')
+  controller.rematch = simpleMessageCommand('rematch')
 
   controller.connect = function connect(token) {
     // Clear message box
     document.getElementById('messages').innerHTML = ''
 
-    // Hide relevant buttons
+    // XXX tight coupling between controller and view
     for (let b of document.getElementsByClassName('post-session')) {
       b.classList.add('hidden')
     }
@@ -79,12 +81,15 @@ let controller = {};
 		  (token ? ('/' + token) : '')
 
     webSocket = new WebSocket(socketUrl)
+
+    // XXX the model should be ripped out and this entire callback ought to be
+    // handled by the view.
     webSocket.onmessage = function (event) {
       let data = JSON.parse(event.data)
 
       // ACK messages are annoying; don't print them out
       if (data.op !== 'ack') {
-        console.log({message: 'received', data: data})
+        console.log('received', data)
       }
 
       // Handle operands which change the game's state.
@@ -110,32 +115,36 @@ let controller = {};
     }
 
     webSocket.onopen = function (event) {
-      window.setInterval(() => sendGameMessage({op: 'heartbeat'}), 10000)
+      window.setInterval(simpleMessageCommand('heartbeat'), 10_000)
     }
 
+    // XXX this entire callback should be handled by the view.
     webSocket.onclose = function (event) {
       let message
       if (event.wasClean) {
         switch (event.code) {
-        case socketCodeOpponentDisconnected:
-          message = 'opponent disconnected'
-          break
-        default:
-          // Ideally unreachable code. Print out the code and reason anyways.
-          console.warn(`Unhandled socket close code: ${event.code}`)
+          case socketCodeOpponentDisconnected:
+            message = 'opponent disconnected'
+            break
+          case socketCodeSessionFull:
+            message = 'session full'
+          default:
+            // Ideally unreachable code. Print out the code and reason anyways.
+            console.warn(`Unhandled socket close code: ${event.code}`)
 
-          message = `connection closed cleanly; code=${event.code}, reason="${event.reason}"`
-          break
+            message = `connection closed cleanly; code=${event.code}, reason="${event.reason}"`
+            break
         }
       } else if (event.target === webSocket) {
         // Connection died on present websocket, and no new connection has been made.
-        message = 'connection died'
+        message = 'connection interrupted'
       }
 
       model.setDisconnected()
       view.endGame(message, false)
     }
 
+    // XXX this entire callback should be handled by the view too.
     webSocket.onerror = function (error) {
       if (token) {
         // Try again, but this time creating a new game instead of
@@ -164,7 +173,7 @@ let controller = {};
     }
   }
 
-  if (document.readyState != 'loading') {
+  if (document.readyState !== 'loading') {
     start()
   } else {
     document.addEventListener('DOMContentLoaded', start)

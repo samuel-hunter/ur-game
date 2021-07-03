@@ -33,7 +33,6 @@
 
 ;; Websocket close codes
 
-(defconstant +ws-code-server-closed+ 1012)
 (defconstant +ws-code-opponent-disconnected+ 4000)
 (defconstant +ws-code-session-full+ 4002)
 

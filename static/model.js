@@ -1,3 +1,7 @@
+/*
+ * Model - planned to delete
+ */
+
 var model = {
   playerColor: null,
   stateArray: ['disconnected', 'no-game'],

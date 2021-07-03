@@ -1,4 +1,7 @@
-/* global model, setTimeout, Notification, controller */
+/* global model, setTimeout, Notification, controller
+ *
+ * View - Manage the game UI and handle events from the game server
+ */
 
 // Explicit semicolon so that JS doesn't mistake the parens as calling the object.
 var view = {};

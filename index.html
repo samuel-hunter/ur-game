@@ -20,6 +20,7 @@
     <link rel="stylesheet" href="static/app.css">
     <link rel="icon" href="static/rosette.png">
 
+    <!-- Hide the game if the person disables JavaScript -->
     <noscript>
       <style>
        #game-container {
@@ -33,10 +34,11 @@
 
     <noscript id="noscript-modal">
       <p>
-        Being an interactive game, this webpage requires Javascript to
-        function. Please enable Javascript and reload this page.
+        Being an interactive game, this webpage requires JavaScript to
+        function. Please enable JavaScript and reload this page.
       </p>
     </noscript>
+
     <div id="invite-modal" class="hidden">
       <p>Send this invite link to a friend:</p>
       <div id="invite-form">
@@ -44,6 +46,7 @@
         <button id="invite-button" onclick="view.copyInvite()">Copy</button>
       </div>
     </div>
+
     <div id="game-container">
       <main id="game-set">
         <div id="game-session-actions">
