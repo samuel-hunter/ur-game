@@ -41,27 +41,36 @@ contains a URI, and may have additional fields depending on the request:
 The URI's will be provided by the server, and it's strongly recommended that
 the client uses those instead of hardcoded URI's.
 
-### Game Board
+### Session Requests
 
-Request for the board resource. Hypermedia control reveals itself on in-game
-events as the `board` relation, or within `board` resources as the `self`
-relation:
+All session-specific requests are provided as links for every event.
 
-```json
-{ "request": "$uri" }
-```
+#### Rematch
 
-### Game State
-
-Request for the current state of the game. Hypermedia control reveals itself on
-in-game events as the `game` relation, or within `game` resources as the `self`
-relation:
+Request rematch for the opponent player. Hypermedia control reveals itself on
+game resources as the `rematch` relation:
 
 ```json
 { "request": "$uri" }
 ```
 
-### Roll
+#### Chat
+
+Request to send a chat message. Hypermedia control reveals itself on in-session
+events as the `chat` relation:
+
+```json
+{
+	"request": "$uri",
+	"message": "$message"
+}
+```
+
+### Game Requests
+
+All game-specific requests are provided as links within every game resource.
+
+#### Roll
 
 Request for the client's payer to roll the dice. Hypermedia control reveals
 itself on game resources as the `roll` relation:
@@ -70,9 +79,9 @@ itself on game resources as the `roll` relation:
 { "request": "$uri" }
 ```
 
-### Move
+#### Move
 
-Request for the client player's piece to move from a specific grid position.
+Request for the client player's checker to move from a specific grid position.
 The position is either `"pool"`, to indicate to move from the player pool, or
 an array of two integers to indicate a zero-based grid position. Hypermedia
 control reveals itself on game resources as the `move` relation:
@@ -84,7 +93,7 @@ control reveals itself on game resources as the `move` relation:
 }
 ```
 
-### Draw
+#### Draw
 
 Offer a draw to the opponent player. Hypermedia control reveals itself on game
 resources as the `draw` relation:
@@ -93,34 +102,13 @@ resources as the `draw` relation:
 { "request": "$uri" }
 ```
 
-### Rematch
-
-Request rematch for the opponent player. Hypermedia control reveals itself on
-game resources as the `rematch` relation:
-
-```json
-{ "request": "$uri" }
-```
-
-### Forfeit
+#### Forfeit
 
 Request the client's player forfeits the game. Hypermedia control reveals
 itself on game resources as the `forfeit` relation:
 
 ```json
 { "request": "$uri" }
-```
-
-### Chat
-
-Request to send a chat message. Hypermedia control reveals itself on in-session
-events as the `chat` relation:
-
-```json
-{
-	"request": "$uri",
-	"message": "$message"
-}
 ```
 
 ## Events
@@ -136,34 +124,24 @@ like:
 
 ```json
 {
-	"event": "$uri",
 	// some event data...
 	"_links": {
-		"chat": "$uri",
-		"game": "$uri"
+		"chat": "$uri"
 	},
 	// The Game resource is usually embedded if the event changes the game state.
 	"_embedded": {
 		"game": {
 			"_links": {
-				"self": {"href": "$uri"},
-				"board": {"href": "$uri"},
 				"roll": {"href": "$uri"},
 				"draw": {"href": "$uri"},
 				"forfeit": {"href": "$uri"}
 			},
 			// some game data...
 		}
-	}
+	},
+	"event": "$uri"
 }
 ```
-
-**All** events provide Session-related hypermedia controls in `$._links`. Any
-of the links may be hidden in an individual control depending on whether the
-client is forbidden from making that request. The fields are:
-
-- `chat`
-- `rematch`
 
 ### The Game Resource and Hypermedia Controls
 
@@ -173,8 +151,8 @@ state of the game).
 
 ```json
 {
+	"_id": "@this",
 	"_links": {
-		"self": {"href": "$uri"},
 		"board": {"href": "$uri"},
 		"roll": {"href": "$uri"},
 		"move": {"href": "$uri"},
@@ -190,6 +168,12 @@ state of the game).
 }
 ```
 
+TODO: read over this
+
+A `$player` may either be `black` or `white`. A `roll` may either be
+
+The `boardPieces` are an array of rows, of which rows are arrays. A `$space` may either be `white`, `black`, or `empty` for
+
 (A `$player` value can be either `white` or `black`, and a `space` value can
 be a player or `none`. A `roll` may either be `null` or an array of `1` or
 `0` values.)
@@ -200,9 +184,6 @@ The Board resource holds `nrows` and `ncolumns` integer fields, and a 2D array o
 
 ```json
 {
-	"_links": {
-		"self": {"href": "$uri"}
-	},
 	"nrows": integer,
 	"ncolumns": integer,
 	"rows": [ [ "$tile", ... ], ... ]
@@ -211,34 +192,38 @@ The Board resource holds `nrows` and `ncolumns` integer fields, and a 2D array o
 
 A `$tile` for the time being can be either `empty`, `normal`, or `rosette`.
 
-### Session Join
+### Session Create
 
-Sent on connection when the client joins a session. If the client is the only
-one in the session, provides a URL for another client to join:
+Sent on connection when the client creates a new session. Provides a URI for
+another client to join:
 
 ```json
 {
+	"_links": {
+		"chat": {"href": "$uri"}
+	}
 	"event": "/join",
 	"joinUrl": "$url" or null,
-	"_links": { ... }
 }
 ```
 
 ### Game Start
 
-Marks the beginning of a game, usually when two clients connect or a rematch
-has initiated. Embeds the Game resource:
+Marks the beginning of a game, when two clients connect or a rematch has
+initiated. The second client who joins a session receives this on connection.
+Embeds the Game and Board resources:
 
 ```json
 {
-	"event": "/games/@this/start",
 	"_links": {
-		...,
-		"game": { "href": "/games/@this" }
+		"chat": {"href": "$uri"},
+		...
 	},
 	"_embedded": {
-		"game": { ... }
-	}
+		"game": { ... },
+		"board": { ... }
+	},
+	"event": "/games/@this/start"
 }
 ```
 
@@ -249,16 +234,16 @@ Embeds the Game resource:
 
 ```json
 {
-	"event": "/games/@this/over",
-	"winner": "$player",
-	"reason": "$reason",
 	"_links": {
 		...,
 		"game": { "href": "$uri" }
 	},
 	"_embedded": {
 		"game": { ... }
-	}
+	},
+	"event": "/games/@this/over",
+	"winner": "$player",
+	"reason": "$reason"
 }
 ```
 
@@ -268,10 +253,10 @@ Indicates a player has sent a message:
 
 ```json
 {
+	"_links": { ... },
 	"event": "/message",
 	"player": "$player",
-	"message": string,
-	"_links": { ... }
+	"message": string
 }
 ```
 
@@ -282,37 +267,32 @@ the session is in-game, embeds the Game resource:
 
 ```json
 {
-	"event": "/error",
-	"code": "$code",
-	"description": "$description",
 	"_links": {
 		...,
 		"game": { "href": "$game" }
 	},
 	"_embedded": {
 		"game": { ... }
-	}
+	},
+	"event": "/error",
+	"code": "$code",
+	"description": "$description"
 }
 ```
 
 ### Denied
 
 Indicates a client request has been denied, either because it is malformed or
-doesn't make sense with the session/game's current state. If the session is
-in-game, embeds the Game resource:
+doesn't make sense with the session/game's current state. Sends an overall
+message, and a list of errors that boiled into the given denial.
 
 ```json
 {
+	"_links": { ... },
 	"event": "/denied",
 	"fromUri": "$uri",
-	"reason": "$reason",
-	"_links": {
-		...,
-		"game": { "href": "$uri" }
-	},
-	"_embedded": {
-		"game": { ... }
-	}
+	"message": "$message",
+	"errors": [ "$error", ... ]
 }
 ```
 
@@ -322,9 +302,9 @@ Indicates a player wishes to tie a game, but the game has not yet tied.
 
 ```json
 {
+	"_links": { ... },
 	"event": "/games/@this/tie",
-	"player": "$player",
-	"_links": { ... }
+	"player": "$player"
 }
 ```
 
@@ -335,15 +315,15 @@ skipped turn. Embeds the Game resource:
 
 ```json
 {
-	"event": "/games/@this/roll",
-	"skippedTurn": boolean,
 	"_links": {
 		...,
 		"game": { "href": "$uri" }
 	},
 	"_embedded": {
 		"game": { ... }
-	}
+	},
+	"event": "/games/@this/roll",
+	"skippedTurn": boolean
 }
 ```
 
@@ -355,15 +335,15 @@ the Game resource:
 
 ```
 {
-	"event": "/games/@this/move",
-	"moveType": moveType,
-	"skippedTurn": boolean,
 	"_links": {
 		...,
 		"game": { "href": "$uri" }
 	},
 	"_embedded": {
 		"game": { ... }
-	}
+	},
+	"event": "/games/@this/move",
+	"moveType": moveType,
+	"skippedTurn": boolean
 }
 ```
