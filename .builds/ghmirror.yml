@@ -4,7 +4,6 @@ environment:
   GIT_SSH_COMMAND: ssh -o StrictHostKeyChecking=no
 secrets:
 - d4afbad1-4f43-433a-bf95-c859d4a6abcd
-shell: false
 sources:
 - https://git.sr.ht/~shunter/ur-game
 tasks:

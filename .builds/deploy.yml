@@ -1,0 +1,33 @@
+image: debian/stable
+environment:
+  prod: cd@shunter.xyz
+  target: /srv/ur-game
+  roswell_release: 21.06.14.110
+packages:
+- wget
+- rsync
+secrets:
+- 1ee8ca54-5b4d-4d53-97cd-52fbb9606387
+sources:
+- https://git.sr.ht/~shunter/ur-game
+tasks:
+- install-roswell: |
+    wget -Oroswell.tar.bz2 https://github.com/roswell/roswell/releases/download/v21.06.14.110/roswell-$roswell_release-linux-x86_64.tar.bz2
+    tar -xf roswell.tar.bz2
+    $HOME/roswell/ros install sbcl-bin
+    $HOME/roswell/ros use sbcl-bin
+- build: |
+    cd ur-game
+    $HOME/roswell/ros build roswell/ur-game.ros
+- deploy: |
+    sshopts="ssh -o StrictHostKeyChecking=no -p 2220"
+    rsyncopts="--recursive --partial --progress --delete"
+
+    cd ur-game
+    $sshopts $prod sudo systemctl stop ur-game.service
+    rsync --rsh="$sshopts" $rsyncopts index.html static roswell/ur-game $prod:$target
+    $sshopts $prod sudo systemctl start ur-game.service
+triggers:
+- action: email
+  condition: failure
+  to: builds@shunter.xyz
