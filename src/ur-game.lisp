@@ -13,8 +13,7 @@
   (:import-from :json
                 :encode-json-plist-to-string
                 :decode-json-from-string)
-  (:export :start
-           :*app*))
+  (:export :start))
 
 (in-package #:ur-game)
 
@@ -24,12 +23,11 @@
 
 ;; File Paths
 
-(defparameter +app-root+
-  (asdf:system-source-directory :ur-game))
-(defparameter +static-path+
-  (merge-pathnames #P"static/" +app-root+))
-(defparameter +index-path+
-  (merge-pathnames #P"index.html" +app-root+))
+(defun static-directory (app-root)
+  (merge-pathnames #P"static/" app-root))
+
+(defun index-filepath (app-root)
+  (merge-pathnames #P"index.html" app-root))
 
 ;; Websocket close codes
 
@@ -268,7 +266,7 @@
       (funcall peeking-app env)
       (funcall app env))))
 
-(defparameter *app*
+(defun app (app-root)
   (lack:builder
     ;; === Middlewares ===
     (peek-request
@@ -290,16 +288,21 @@
              `(302 (:location ,(concatenate 'string "/#/" token)))))
     ;; Serve "index.html" for "/".
     (route "/"
-           (constantly `(200 (:content-type "text/html") ,+index-path+)))
+           (constantly `(200 (:content-type "text/html") ,(index-filepath app-root))))
     ;; Static Path
-    (:static :path "/static/" :root +static-path+)
+    (:static :path "/static/" :root (static-directory app-root))
     ;; All other routes are invalid.
     (constantly '(404 (:content-type "text/plain") ("Not Found")))))
 
 (defvar *website-handler* nil)
 
-(defun start ()
+(defun start (&key (app-root (asdf:system-source-directory :ur-game))
+                   (port 5000)
+                   (use-thread t))
   (when *website-handler* (clack:stop *website-handler*))
-  (setf *website-handler* (clack:clackup *app*
-                                         :server :hunchentoot))
+  (setf *website-handler*
+        (clack:clackup (app app-root)
+                       :server :hunchentoot
+                       :port port
+                       :use-thread use-thread))
   (values))

@@ -9,6 +9,9 @@
                #:cl-json
                #:cl-ppcre
                #:clack
+               #:clack-handler-hunchentoot
+               #:lack
+               #:lack-middleware-static
                #:session-token
                #:uiop
                #:vom

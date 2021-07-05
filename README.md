@@ -14,10 +14,10 @@ Common Lisp web development.
 
 # Run the Software
 
-The web app runs on [Clack](https://github.com/fukamachi/clack). I recommend
-using Roswell and `clackup`. to start the server:
+The web app uses [Roswell](https://roswell.github.io/) to launch. After you
+have that install, run:
 
-    $ clackup clackup.lisp
+    $ ./roswell/ur-game
 
 Alternatively, with your CL impl of choice (I use SBCL):
 
@@ -27,7 +27,7 @@ Alternatively, with your CL impl of choice (I use SBCL):
 
 * You win the game by getting all your seven pieces from one end of
   the board to the other.
-* You roll marked four dice, and the sum of all dice with marks up is
+* You roll four marked dice, and the sum of all dice with marks up is
   how much you can move a single piece on your turn.
 * If your piece lands on a rosette, you gain an extra turn.
 * You can jump over or capture enemy pieces, but you cannot capture
