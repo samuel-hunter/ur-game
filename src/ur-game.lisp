@@ -143,80 +143,105 @@
   (stop-session session "Opponent disconnected"
                 :code +ws-code-opponent-disconnected+))
 
-;; text-message-received helper function
-(defun send-game-state (session)
+;; Request handling
+(defparameter *request-dispatch*
+  (make-hash-table :test 'equal))
+
+(defmacro defrequest (function-name opcode-name lambda-list &body body)
+  `(prog1
+     (defun ,function-name ,lambda-list ,@body)
+     (setf (gethash ,opcode-name *request-dispatch*) ',function-name)))
+
+(defrequest handle-heartbeat "heartbeat" (session client message)
+  (declare (ignore session message))
+  (send-message* client :op :ack))
+
+(defrequest handle-chat "message" (session client message)
   (broadcast-message* session
-                      :op :game-state
-                      :game (game session)))
+                      :op :message
+                      :message message
+                      :color (color client)))
+
+(defrequest handle-rematch "rematch" (session client message)
+  (declare (ignore message))
+  (if (game-over-p session)
+      (start-game session)
+      (send-message* client
+                     :op :error
+                     :reason :not-game-over)))
+
+(defrequest handle-draw "draw" (session client message)
+  (declare (ignore message))
+  (if (offer-draw (game session) (color client))
+      (stop-game session nil)
+      (broadcast-message* session
+                          :op :tie
+                          :player (color client))))
+
+(defrequest handle-forfeit "forfeit" (session client message)
+  (declare (ignore message))
+  (broadcast-message* session
+                      :op :forfeit
+                      :player (color client)))
+
+(defrequest handle-roll "roll" (session client message)
+  (declare (ignore message))
+  (if (not (client-turn-p session client))
+      (send-message* client
+                     :op :err
+                     :reason :not-your-turn)
+      (multiple-value-bind (successful-p total flips turn-ended-p error-reason)
+        (roll (game session))
+
+        (if successful-p
+            (broadcast-message* session
+                                :op :roll
+                                :successful t
+                                :total total
+                                :flips flips
+                                :skip-turn (make-instance
+                                             'json-bool :p turn-ended-p))
+            (send-message* client
+                           :op :roll
+                           :successful (make-instance
+                                         'json-bool :p nil)
+                           :reason error-reason)))))
+
+(defrequest handle-move "move" (session client message)
+  (let ((game (game session)))
+    (if (not (client-turn-p session client))
+        (send-message* client
+                       :op :err
+                       :reason :not-your-turn)
+        (multiple-value-bind (successful-p move-type turn-ended-p)
+          (make-move game (cdr (assoc :position message)))
+          (if successful-p
+              (progn
+                (broadcast-message* session
+                                    :op :move
+                                    :successful t
+                                    :move-type move-type
+                                    :skip-turn (make-instance
+                                                 'json-bool :p turn-ended-p))
+                (if-let (winner (winner game))
+                  (stop-game session winner)
+                  (broadcast-message* session
+                                      :op :game-state
+                                      :game game)))
+              (send-message* client
+                             :op :move
+                             :successful (make-instance
+                                           'json-bool :p nil)
+                             :reason move-type))))))
 
 (defun handle-message (session client message)
-  (let* ((message (decode-json-from-string message))
-         (operand (cdr (assoc :op message)))
-         (game (game session)))
+  (let* ((message (decode-json-from-string message)))
     (vom:debug "~S" (list :received :client client :message message))
-    (switch (operand :test #'string-equal)
-      ("heartbeat" (send-message* client :op :ack))
-      ("message" (broadcast-message* session
-                                     :op :message
-                                     :message message
-                                     :color (color client)))
-      ("rematch" (if (game-over-p session)
-                     (start-game session)
-                     (send-message* client
-                                    :op :error
-                                    :reason :not-game-over)))
-      ("draw" (if (offer-draw game (color client))
-                  (stop-game session nil)
-                  (broadcast-message* session
-                                      :op :tie
-                                      :player (color client))))
-      ("forfeit" (broadcast-message* session
-                                     :op :forfeit
-                                     :player (color client)))
-      ("roll" (if (not (client-turn-p session client))
-                  (send-message* client
-                                 :op :err
-                                 :reason :not-your-turn)
-                  (multiple-value-bind (successful-p total flips turn-ended-p error-reason)
-                    (roll game)
-                    (if successful-p
-                        (broadcast-message* session
-                                            :op :roll
-                                            :successful t
-                                            :total total
-                                            :flips flips
-                                            :skip-turn (make-instance
-                                                         'json-bool :p turn-ended-p))
-                        (send-message* client
-                                       :op :roll
-                                       :successful (make-instance
-                                                     'json-bool :p nil)
-                                       :reason error-reason)))))
-       ("move" (if (not (client-turn-p session client))
-                   (send-message* client
-                                  :op :err
-                                  :reason :not-your-turn)
-                   (multiple-value-bind (successful-p move-type turn-ended-p)
-                     (make-move game (cdr (assoc :position message)))
-                     (if successful-p
-                         (progn
-                           (broadcast-message* session
-                                               :op :move
-                                               :successful t
-                                               :move-type move-type
-                                               :skip-turn (make-instance
-                                                            'json-bool :p turn-ended-p))
-                           (if-let (winner (winner game))
-                             (stop-game session winner)
-                             (send-game-state session)))
-                         (send-message* client
-                                        :op :move
-                                        :successful (make-instance
-                                                      'json-bool :p nil)
-                                        :reason move-type)))))
-       (t (send-message* client
-                         :op :err
-                         :reason :no-such-operand)))))
+    (if-let ((handler (gethash (cdr (assoc :op message)) *request-dispatch*)))
+      (funcall handler session client message)
+      (send-message* client
+                     :op :err
+                     :reason :no-such-operand))))
 
 (defun session-app (env &optional token)
   (let* ((ws (websocket-driver:make-server env))
