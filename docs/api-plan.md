@@ -1,164 +1,105 @@
-# API as it's planned to be
+# API as It's Planned to Be
 
-The goal is for communication to appriach Level 3 Maturity on the Richardson REST
-Maturity model. Most of the API will be within a websocket with two types of
-endpoints: one endpoint to create a new session, and one to join a preexisting
-session.
+The main goal for this API is to provide HATEOAS for two-way client-server communication.
+There will be two distinct types of messages: requests (from client to server) and events (from server to client).
+Events may embed resources, and resources may provide an ID, a list of hypermedia controls, and a list of event callbacks.
 
-In reality, the API won't be stateless. I think it makes sense at a minimum for
-the server to remember which player the client is, which breaks the basic
-statelessness principle of REST from what I understand. That said, I still see
-benefit into adhering to the other principles while keeping the statefullness
-that *is* there to a minimum.
+I'll be using a homegrown protocol ontop of JSON on WebSockets because I don't see any good standard for the time being, just articles explaining that REST is not enough.
+I'll call it HERL for now (Hypertext Events and Requests Language) because it sounds similar enough to HAL to call it good.
 
-## Communication model
+## What I'm Looking Out of HERL
 
-There are two types of messages: clients send requests, servers send events.
-All of them are in JSON (application/json), but server-side messages are
-additionally in JSON HAL (application/hal+json).
+I want HERL to be structured enough that I can abstract away the event callbacks and requests on the client-side, and make it easy to provide resource controls and events on the server-side, but still flexible enough that it only cares about those two main parts.
+I want HERL to provide both of these through hypermedia controls, so the only *large* magic string the client needs to know about is the connection endpoint.
+All other ways to connect through are from small-word string-value "relations" between resources.
 
-As part of reaching HAL, server events will try to provide hypermedia controls
-within their messages to promote the self-discovery that RESTful glory
-advertises.
+I think roughly, I want the browser side to look like this:
 
-Finally, beyond requests and events, the server will also send occasional
-WebSocket ping frames.
+```js
+HERL.connect('/ws/sessions/new')
+	.on('@', (session) => {
+		session.on('game-start', (data) => {
+			view.setupGame(data.game)
+
+			data.game.on(...)
+		})
+		.on('chat', (data) => {
+			view.sendMessage(data.from, data.message)
+		})
+	})
+	.onError((data) => {
+		view.sendMessage('Game', 'Error: ' + data.summary)
+	})
+	.sendRequest('ready')
+```
+
+And I think going for a command pattern makes sense for the backend:
+
+```lisp
+;; TODO
+```
+
+I also have some game-specific goals I'd use to shape HERL:
+This is going to be for a game, so it makes little sense to "subscribe" to individual events to listen in.
+The client connected to a session, so they're going to hear all events related to that session.
+
+## HERL
+
+There are four key Things: Requests, Events, Resources, and an Error Resource.
+Requests are sent from the client to "request" the server do some action, and they always have an `@request` field that holds a URI string.
+Events are sent from the server to inform clients something happened, and they always have an `@event` field that holds a URI string.
+Resources and Events have none or more of Request hypermedia controls, Event hypermedia controls, and other embedded Resources.
+Resources store Request hyperlinks in the `@requests` field, Event hyperlinks in the `@events` field, and embedded resources in the `@embedded` field.
+All three of these fields (when provided) are JSON objects that map a relation to the Resource to the Thing in question.
+
+An example event with an embedded resource may look like this:
+
+```js
+{
+	"@event": "/game/move",
+	"@events": {
+		"chat": { "href": "/chat" }
+	},
+	"@embedded": {
+		"game": { ... }
+	},
+	"moveType": "capture"
+}
+```
+
+An example request may look like:
+
+```js
+{
+	"@request": "move",
+	"position": [ 2, 3 ]
+}
+```
+
+*TODO explain hypermedia anatomy*
 
 ## Endpoint
 
-The endpoint to create a new session is `wss://$host/ws/sessions`. Endpoints to
-join preexisting sessions are in the form `wss://$host/ws/sessions/:token`.
+The endpoint to create a new session is `wss://$host/ws/sessions`.
+Endpoints to join preexisting sessions are in the form `wss://$host/ws/sessions/:token`.
 
-## Requests
+## Game Resource
 
-Requests are POJ (Plain Old JSON). They always have a `request` field that
-contains a URI, and may have additional fields depending on the request:
-
-```json
-{ "request": "$uri" }
-```
-
-The URI's will be provided by the server, and it's strongly recommended that
-the client uses those instead of hardcoded URI's.
-
-### Session Requests
-
-All session-specific requests are provided as links for every event.
-
-#### Rematch
-
-Request rematch for the opponent player. Hypermedia control reveals itself on
-game resources as the `rematch` relation:
-
-```json
-{ "request": "$uri" }
-```
-
-#### Chat
-
-Request to send a chat message. Hypermedia control reveals itself on in-session
-events as the `chat` relation:
+*TODO*
 
 ```json
 {
-	"request": "$uri",
-	"message": "$message"
-}
-```
-
-### Game Requests
-
-All game-specific requests are provided as links within every game resource.
-
-#### Roll
-
-Request for the client's payer to roll the dice. Hypermedia control reveals
-itself on game resources as the `roll` relation:
-
-```json
-{ "request": "$uri" }
-```
-
-#### Move
-
-Request for the client player's checker to move from a specific grid position.
-The position is either `"pool"`, to indicate to move from the player pool, or
-an array of two integers to indicate a zero-based grid position. Hypermedia
-control reveals itself on game resources as the `move` relation:
-
-```json
-{
-	"request": "$uri",
-	"position": gridPosition
-}
-```
-
-#### Draw
-
-Offer a draw to the opponent player. Hypermedia control reveals itself on game
-resources as the `draw` relation:
-
-```json
-{ "request": "$uri" }
-```
-
-#### Forfeit
-
-Request the client's player forfeits the game. Hypermedia control reveals
-itself on game resources as the `forfeit` relation:
-
-```json
-{ "request": "$uri" }
-```
-
-## Events
-
-Events are HAL JSON and always have an `event` URI field. Events usually have
-other POJ fields depending on the event, and some events may embed resources
-(usually the Game state) related to the event. Wherever possible, events and
-their embedded resources provide links to requests the client is permitted to
-make.
-
-An example event, populated with links and an embedded Game resource, may look
-like:
-
-```json
-{
-	// some event data...
-	"_links": {
-		"chat": "$uri"
+	"@events": {
+		"roll": { "href": "/game/roll" },
+		"move": { "href": "/game/move" },
+		"draw": { "href": "/game/draw" },
+		"game-over": { "href": "/game/game-over" }
 	},
-	// The Game resource is usually embedded if the event changes the game state.
-	"_embedded": {
-		"game": {
-			"_links": {
-				"roll": {"href": "$uri"},
-				"draw": {"href": "$uri"},
-				"forfeit": {"href": "$uri"}
-			},
-			// some game data...
-		}
-	},
-	"event": "$uri"
-}
-```
-
-### The Game Resource and Hypermedia Controls
-
-The Game resource is structured like this, along with a list of all possible
-links (usually, some are hidden, as they would be invalid depending on the
-state of the game).
-
-```json
-{
-	"_id": "@this",
-	"_links": {
-		"board": {"href": "$uri"},
-		"roll": {"href": "$uri"},
-		"move": {"href": "$uri"},
-		"draw": {"href": "$uri"},
-		"rematch": {"href": "$uri"},
-		"forfeit": {"href": "$uri"}
+	"@requests": {
+		"roll": { "href": "/game/roll" },
+		"move": { "href": "/game/move" },
+		"draw": { "href": "/game/draw" },
+		"forfeit": { "href": "/game/forfeit" }
 	},
 	"boardPieces": [ [ "$space", ... ], ... ]
 	"blackPool": integer,
@@ -168,182 +109,156 @@ state of the game).
 }
 ```
 
-TODO: read over this
+A `$player` may either be `black` or `white`.
+A `roll` may either be an array of `1` or `0` values, or `null`.
+The `boardPieces` field is an array of rows, of which rows are arrays of spaces.
 
-A `$player` may either be `black` or `white`. A `roll` may either be
+## Session Resource
 
-The `boardPieces` are an array of rows, of which rows are arrays. A `$space` may either be `white`, `black`, or `empty` for
+??? *TODO*
 
-(A `$player` value can be either `white` or `black`, and a `space` value can
-be a player or `none`. A `roll` may either be `null` or an array of `1` or
-`0` values.)
+## Session-bound Events
 
-### The Board Resource and Hypermedia Controls
+Session-bound events always provide `chat` and `rematch` requests when available, and always provide the `newGame` event.
 
-The Board resource holds `nrows` and `ncolumns` integer fields, and a 2D array of tiles:
+### New Game
 
-```json
-{
-	"nrows": integer,
-	"ncolumns": integer,
-	"rows": [ [ "$tile", ... ], ... ]
-}
-```
-
-A `$tile` for the time being can be either `empty`, `normal`, or `rosette`.
-
-### Session Create
-
-Sent on connection when the client creates a new session. Provides a URI for
-another client to join:
+Indicates a new game has been made.
+Embeds the Game resource and Board:
 
 ```json
 {
-	"_links": {
-		"chat": {"href": "$uri"}
-	}
-	"event": "/join",
-	"joinUrl": "$url" or null,
+	"@event": "/new-game",
+	"@events": { ... },
+	"@requests": { ... },
+	"@embedded": { "@game": ... },
+	"boardColumns": 10,
+	"boardRows": 3,
+	"board": [ [ "$tile", ... ], ... ]
 }
 ```
 
-### Game Start
+A `tile` may either be `normal`, `empty`, or `rosette`.
 
-Marks the beginning of a game, when two clients connect or a rematch has
-initiated. The second client who joins a session receives this on connection.
-Embeds the Game and Board resources:
+### Token
+
+Indicates a session has been born, and needs a new player.
+Provides a `token` field to join the session at the endpoint `/ws/sessions/:token`:
 
 ```json
 {
-	"_links": {
-		"chat": {"href": "$uri"},
-		...
-	},
-	"_embedded": {
-		"game": { ... },
-		"board": { ... }
-	},
-	"event": "/games/@this/start"
+	"@event": "/token",
+	"@events": { ... },
+	"@requests": { ... },
+	"token": "$token"
 }
 ```
 
-### Game Over
+### Chat
 
-Indicates the game is over, providing the winner and the final game state.
-Embeds the Game resource:
+Indicates someone has said something.
+Provides a `from` field (either `"you"` or `"them"`) and `message` string field:
 
 ```json
 {
-	"_links": {
-		...,
-		"game": { "href": "$uri" }
-	},
-	"_embedded": {
-		"game": { ... }
-	},
-	"event": "/games/@this/over",
-	"winner": "$player",
-	"reason": "$reason"
+	"@event": "chat",
+	"@events": { ... },
+	"@requests": { ... },
+	"from": "$color",
+	"message": "$message"
 }
 ```
 
-### Message
+## Session-bound Requests
 
-Indicates a player has sent a message:
+*TODO*
+
+### Chat
+
+Request to send a chat message:
 
 ```json
 {
-	"_links": { ... },
-	"event": "/message",
-	"player": "$player",
-	"message": string
+	"@request": "$uri",
+	"message": "message"
 }
 ```
 
-### Error
+### Rematch
 
-Indicates an internal server error. May result in a premature termination. If
-the session is in-game, embeds the Game resource:
+Request to rematch the opponent after a game has finished.
 
 ```json
-{
-	"_links": {
-		...,
-		"game": { "href": "$game" }
-	},
-	"_embedded": {
-		"game": { ... }
-	},
-	"event": "/error",
-	"code": "$code",
-	"description": "$description"
-}
+{ "@request": "$uri" }
 ```
 
-### Denied
+## Game-bound Events
 
-Indicates a client request has been denied, either because it is malformed or
-doesn't make sense with the session/game's current state. Sends an overall
-message, and a list of errors that boiled into the given denial.
-
-```json
-{
-	"_links": { ... },
-	"event": "/denied",
-	"fromUri": "$uri",
-	"message": "$message",
-	"errors": [ "$error", ... ]
-}
-```
-
-### Tie
-
-Indicates a player wishes to tie a game, but the game has not yet tied.
-
-```json
-{
-	"_links": { ... },
-	"event": "/games/@this/tie",
-	"player": "$player"
-}
-```
+*TODO*
 
 ### Roll
 
-Indicates the turn-controlling player rolled, and whether it results in a
-skipped turn. Embeds the Game resource:
+*TODO*
 
 ```json
-{
-	"_links": {
-		...,
-		"game": { "href": "$uri" }
-	},
-	"_embedded": {
-		"game": { ... }
-	},
-	"event": "/games/@this/roll",
-	"skippedTurn": boolean
-}
+{ "@request": "$uri" }
 ```
 
 ### Move
 
-Indicates the turn-controlling player moved. `moveType` describes the type of
-move made. `endedTurn` indicates whether the move ends the current turn. Embeds
-the Game resource:
+*TODO*
 
-```
+```json
 {
-	"_links": {
-		...,
-		"game": { "href": "$uri" }
-	},
-	"_embedded": {
-		"game": { ... }
-	},
-	"event": "/games/@this/move",
-	"moveType": moveType,
-	"skippedTurn": boolean
+	"@request": "$uri",
+	"position": position
 }
+```
+
+### Draw
+
+*TODO*
+
+```json
+{ "@request": "$uri" }
+```
+
+## Game-bound Requests
+
+*TODO*
+
+### Roll
+
+Request for the client's player to roll the dice.
+
+```json
+{ "@request": "$uri" }
+```
+
+### Move
+
+Request for the client player's checker to move from a specific grid position.
+The position is either `"pool"`, to indicate it comes from the player's pool, or an array of two integers to indicate a zero-based grid position:
+
+```json
+{
+	"@request": "$uri",
+	"position": gridPosition
+}
+```
+
+### Draw
+
+Offer a draw to the opponent player:
+
+```json
+{ "@request": "$uri" }
+```
+
+### Forfeit
+
+Request to forfeit the match.
+
+```json
+{ "@request": "$uri" }
 ```
