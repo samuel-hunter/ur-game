@@ -71,6 +71,7 @@
   (let* ((token (funcall *game-token-generator*))
          (session (make-instance 'session :token token)))
     (setf (gethash token *sessions*) session)
+    (vom:info "STARTED session ~A" token)
     session))
 
 (defun find-session (token)
@@ -78,7 +79,7 @@
 
 (defun stop-session (session reason &key (code 1000))
   "Disconnect all clients and remove the game session from memory."
-  (vom:notice "Stopping game ~A: ~A" (token session) reason)
+  (vom:notice "STOPPED session ~A: ~A" (token session) reason)
   (loop :for client :in (clients session)
         :do (websocket-driver:close-connection (ws client) reason code))
   (remhash (token session) *sessions*))
@@ -93,7 +94,7 @@
 
 (defun send-message (client message)
   "Send a message to one client."
-  (vom:debug "~S" (list :sending :client (ws client) :message message))
+  (vom:debug "SENDING message to client ~S: ~S" (ws client) message)
   (websocket-driver:send-text
     (ws client) (encode-json-plist-to-string message)))
 
@@ -236,7 +237,7 @@
 
 (defun handle-message (session client message)
   (let* ((message (decode-json-from-string message)))
-    (vom:debug "~S" (list :received :client client :message message))
+    (vom:debug "RECEIVED message from client ~S: ~S" (ws client) message)
     (if-let ((handler (gethash (cdr (assoc :op message)) *request-dispatch*)))
       (funcall handler session client message)
       (send-message* client
@@ -291,15 +292,22 @@
       (funcall peeking-app env)
       (funcall app env))))
 
+(defun remote-addr (env)
+  "Grab the IP from a reverse proxy's X-Real-IP header, or from the remote
+   address"
+  (or (gethash "x-real-ip" (getf env :headers))
+      (getf env :remote-addr)))
+
 (defun app (app-root)
   (lack:builder
     ;; === Middlewares ===
     (peek-request
       (lambda (env)
-        (vom:debug "~A ~S from ~A"
-                   (getf env :request-method)
-                   (getf env :request-uri)
-                   (getf env :remote-addr))))
+        (vom:debug1 "RECEIVED request ~S" env)
+        (vom:info "~A ~S from ~A"
+                  (getf env :request-method)
+                  (getf env :request-uri)
+                  (remote-addr env))))
     ;; === Websocket Routing ===
     ;; Route /wss/sessions to new-session websocket
     (route "/wss/sessions" 'session-app)
