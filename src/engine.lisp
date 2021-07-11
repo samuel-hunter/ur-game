@@ -3,7 +3,6 @@
   (:import-from :alexandria
                 :switch)
   (:export :game
-           :make-game
            :winner
 
            ;; Game actions
@@ -16,8 +15,7 @@
 
 (in-package #:ur-game.engine)
 
-(defun make-empty-path (length)
-  (make-array length :initial-element :none))
+
 
 ;; path lengths
 (defparameter +start-length+ 4)
@@ -28,15 +26,14 @@
 
 (defparameter +starting-pieces+ 7)
 
-;; Rosette tiles protect pieces from battle and give the player a
-;; second turn
-(defparameter +rosettes+ '(4 8 14))
-
 ;; Board Data
 (defclass path-segment ()
   ((tile-vector :initarg :tile-vector :reader tile-vector)
-   (black-next :initarg :black-next :reader black-next)
-   (white-next :initarg :white-next :reader white-next)))
+   (black-next :initarg :black-next :reader black-next
+               :documentation "Next path segment for black checkers")
+   (white-next :initarg :white-next :reader white-next
+               :documentation "Next path segment for white checkers"))
+  (:documentation "A segment of a route that a game checker travels to reach the end."))
 
 (defun next-segment (path-segment color)
   (ecase color
@@ -44,13 +41,16 @@
     (:white (white-next path-segment))))
 
 (defun route-length (path-segment color)
+  "Return the length of the entire route for the given color."
   (loop :for segment := path-segment :then (next-segment segment color)
         :while segment
         :sum (length (tile-vector segment))))
 
 (defun find-tile-vector (n path-segment color)
+  "If n is in-bounds, return two values: the vector that contains the nth tile,
+   and the offset to access that tile. Otherwise, return nil."
   (when (null path-segment)
-    (return-from find-tile-vector nil))
+    (return-from find-tile-vector))
 
   (let* ((tile-vector (tile-vector path-segment))
          (length (length tile-vector)))
@@ -61,6 +61,7 @@
                           color))))
 
 (defun nth-tile (n path-segment color)
+  "Return the nth tile for the given color's route."
   (multiple-value-bind (vector relative-n)
     (find-tile-vector n path-segment color)
 
@@ -68,6 +69,7 @@
       (aref vector relative-n))))
 
 (defun (setf nth-tile) (new-value n path-segment color)
+  "Set the nth tile for the given color's route."
   (multiple-value-bind (vector relative-n)
     (find-tile-vector n path-segment color)
 
@@ -75,6 +77,7 @@
       (setf (aref vector relative-n) new-value))))
 
 (defun route-tiles (path-segment color)
+  "Return a vector of all path segments concatenated together."
   (loop :for segment := path-segment :then (next-segment segment color)
         :while segment
         :collect (tile-vector segment) :into vectors
@@ -85,7 +88,8 @@
    (white-start :initarg :white-start)
    (shared-middle :initarg :shared-middle)
    (black-end :initarg :black-end)
-   (white-end :initarg :white-end)))
+   (white-end :initarg :white-end))
+  (:documentation "Collection of all tile vectors"))
 
 (defun make-tile-vector (length)
   (make-array length :initial-element :none))
@@ -120,8 +124,10 @@
                            :white-next shared-path-segment))))
 
 (defun rosettep (index)
-  "Return whether the tile has a rosette"
-  (member index +rosettes+))
+  "Return whether the tile index has a rosette"
+  (member index '(4 8 14)))
+
+
 
 (defclass player ()
   ((start-path :initarg :start-path
@@ -133,23 +139,20 @@
 
 (defclass game ()
   ((random-state :initform (make-random-state t))
-   (black :initarg :black
-          :reader black-player)
-   (white :initarg :white
-          :reader white-player)
-   (board :initarg :board
-          :reader board)
+   (black :reader black-player)
+   (white :reader white-player)
+   (board :reader board)
    (turn :initform :white
          :accessor turn)
    (last-roll :initform nil
               :accessor last-roll)))
 
-(defun make-game ()
-  (multiple-value-bind (board black-path white-path) (make-board-and-paths)
-    (make-instance 'game
-                   :black (make-instance 'player :start-path black-path)
-                   :white (make-instance 'player :start-path white-path)
-                   :board board)))
+(defmethod initialize-instance :after ((instance game) &key &allow-other-keys)
+  (multiple-value-bind (new-board black-path white-path) (make-board-and-paths)
+    (with-slots (black white board) instance
+      (setf black (make-instance 'player :start-path black-path)
+            white (make-instance 'player :start-path white-path)
+            board new-board))))
 
 ;; TODO figure out how to separate this last piece of presentation from the
 ;; game engine.

@@ -17,6 +17,8 @@
 
 (in-package #:ur-game)
 
+
+
 ;; Logging (TODO: set level in configuration.)
 
 (vom:config :ur-game :debug)
@@ -34,29 +36,17 @@
 (defconstant +ws-code-opponent-disconnected+ 4000)
 (defconstant +ws-code-session-full+ 4002)
 
-(defclass session ()
-  ((game :initform nil :accessor game)
-   (token :initarg :token :reader token)
-   (clients :initform () :accessor clients)))
+(defvar *sessions* (make-hash-table :test 'equal))
 
-(defun in-game-p (session)
-  (and (game session) t))
+(defun register-session (session)
+  (setf (gethash (slot-value session 'token) *sessions*)
+        session))
 
-(defun game-over-p (session)
-  (and (= 2 (length (clients session)))
-       (null (game session))))
+(defun find-session (token)
+  (gethash token *sessions*))
 
-(defun session-full-p (session)
-  (>= (length (clients session)) 2))
-
-(defun add-client (session client)
-  "Attempt to add the client to the session, and return whether it was successful."
-  (if (session-full-p session)
-      (prog1 nil
-        (websocket-driver:close-connection
-          (ws client) "Session is already full" +ws-code-session-full+))
-      (prog1 t
-        (push client (clients session)))))
+(defun deregister-session (session)
+  (remhash (slot-value session 'token) *sessions*))
 
 ;; NOTE: The default generator from `session-token' grabs randomness
 ;; from /dev/urandom or /dev/arandom, and therefore doesn't work on
@@ -64,25 +54,40 @@
 (defvar *game-token-generator*
   (session-token:make-generator :token-length 10))
 
-(defvar *sessions* (make-hash-table :test 'equal)
-  "Hash of sessions fetched by their token.")
+(defclass session ()
+  ((game :initform nil :accessor game)
+   (token :initform (funcall *game-token-generator*) :reader token)
+   (clients :initform () :accessor clients)))
 
-(defun start-session ()
-  (let* ((token (funcall *game-token-generator*))
-         (session (make-instance 'session :token token)))
-    (setf (gethash token *sessions*) session)
-    (vom:info "STARTED session ~A" token)
-    session))
+(defmethod initialize-instance :after ((instance session) &key &allow-other-keys)
+  ;; Start and register the session
+  (register-session instance)
+  (vom:info "STARTED session ~A" (slot-value instance 'token)))
 
-(defun find-session (token)
-  (gethash token *sessions*))
+(defun quit-session (session reason &key (code 1000))
+  "Disconnect all clients and deregister the game session."
+  (deregister-session session)
+  (dolist (client (clients session))
+    (websocket-driver:close-connection (ws client) reason code))
+  (vom:notice "STOPPED session ~A: ~A" (token session) reason))
 
-(defun stop-session (session reason &key (code 1000))
-  "Disconnect all clients and remove the game session from memory."
-  (vom:notice "STOPPED session ~A: ~A" (token session) reason)
-  (loop :for client :in (clients session)
-        :do (websocket-driver:close-connection (ws client) reason code))
-  (remhash (token session) *sessions*))
+(defun session-status (session)
+  (with-slots (clients game) session
+    (cond
+      ((< (length clients) 2) :waiting-for-players)
+      (game :in-game)
+      (t :game-over))))
+
+(defun add-client (session client)
+  "Attempt to add the client to the session, and return whether it was successful."
+  (if (eq :waiting-for-players (session-status session))
+      (progn
+        (push client (clients session))
+        t)
+      (progn
+        (websocket-driver:close-connection
+          (ws client) "Session is already full" +ws-code-session-full+)
+        nil)))
 
 (defclass client ()
   ((color :accessor color)
@@ -102,15 +107,15 @@
   (send-message client message))
 
 (defun broadcast-message (session message)
-  "Send a message to all clients."
-  (loop :for client :in (clients session)
-        :do (send-message client message)))
+  "Send the same message to all clients."
+  (dolist (client (clients session))
+    (send-message client message)))
 
 (defun broadcast-message* (session &rest message)
   (broadcast-message session message))
 
 (defun start-game (session)
-  (setf (game session) (make-game))
+  (setf (game session) (make-instance 'game))
   (let ((clients (alexandria:shuffle (clients session))))
     (setf (color (first clients)) :white
           (color (second clients)) :black)
@@ -127,22 +132,7 @@
                       :game (game session))
   (setf (game session) nil))
 
-(defun handle-new-connection (session client)
-  (unless (add-client session client)
-    (return-from handle-new-connection))
-
-  (if (session-full-p session)
-      (start-game session)
-      (send-message* client
-                     :op :game-token
-                     :token (token session))))
-
-(defun handle-close-connection (session client &key code reason)
-  (declare (ignore client code reason))
-  ;; TODO see if (stop-session) disconnecting clients manually triggers this event.
-  ;; TODO maybe maintain a session until it has 0 clients.
-  (stop-session session "Opponent disconnected"
-                :code +ws-code-opponent-disconnected+))
+
 
 ;; Request handling
 (defparameter *request-dispatch*
@@ -165,7 +155,7 @@
 
 (defrequest handle-rematch "rematch" (session client message)
   (declare (ignore message))
-  (if (game-over-p session)
+  (if (eq :game-over (session-status session))
       (start-game session)
       (send-message* client
                      :op :error
@@ -244,10 +234,27 @@
                      :op :err
                      :reason :no-such-operand))))
 
+(defun handle-new-connection (session client)
+  (unless (add-client session client)
+    (return-from handle-new-connection))
+
+  (if (eq :waiting-for-players (session-status session))
+      (send-message* client
+                     :op :game-token
+                     :token (token session))
+      (start-game session)))
+
+(defun handle-close-connection (session client &key code reason)
+  (declare (ignore client code reason))
+  ;; TODO see if (quit-session) disconnecting clients manually triggers this event.
+  ;; TODO maybe maintain a session until it has 0 clients.
+  (quit-session session "Opponent disconnected"
+                :code +ws-code-opponent-disconnected+))
+
 (defun session-app (env &optional token)
   (let* ((ws (websocket-driver:make-server env))
          (client (make-instance 'client :ws ws))
-         (session (or (find-session token) (start-session))))
+         (session (or (find-session token) (make-instance 'session))))
     (websocket-driver:on :open ws (curry 'handle-new-connection session client))
     (websocket-driver:on :message ws (curry 'handle-message session client))
     (websocket-driver:on :close ws (curry 'handle-close-connection session client))
@@ -255,6 +262,8 @@
     (lambda (responder)
       (declare (ignore responder))
       (websocket-driver:start-connection ws))))
+
+
 
 (defun make-path-scanner (path-regex)
   "Converts a path regex like /a/b/{something}/c into a regex that captures {...}'s and "

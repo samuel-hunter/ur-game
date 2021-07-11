@@ -9,6 +9,8 @@
 
 (in-package #:ur-game.json)
 
+
+
 (defclass json-bool ()
   ((p :initarg :p :initform nil :reader json-bool-p)
    (generalised :initarg :generalised :initform nil))
