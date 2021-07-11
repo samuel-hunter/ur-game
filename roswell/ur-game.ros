@@ -11,8 +11,7 @@ exec ros -Q -- $0 "$@"
   (:use :cl))
 (in-package :ros.script.ur-game.3834464264)
 
-(load "ur-game.asd")
-(ql:quickload :ur-game)
+(require :ur-game)
 
 (defun main (&rest argv)
   (declare (ignorable argv))

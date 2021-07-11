@@ -17,8 +17,10 @@ tasks:
     $HOME/roswell/ros install sbcl-bin
     $HOME/roswell/ros use sbcl-bin
 - build: |
-    cd ur-game
-    $HOME/roswell/ros build roswell/ur-game.ros
+    mkdir -p $HOME/.roswell/local-projects/build
+    ln -s ur-game $HOME/.roswell/local-projects/build/
+
+    $HOME/roswell/ros build ur-game/roswell/ur-game.ros
 - deploy: |
     sshopts="ssh -o StrictHostKeyChecking=no -p 2220"
     rsyncopts="--recursive --partial --progress --delete"
