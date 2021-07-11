@@ -22,4 +22,5 @@
   :pathname "src"
   :components ((:file "json")
                (:file "engine")
-               (:file "ur-game" :depends-on ("engine" "json"))))
+               (:file "session" :depends-on ("engine" "json"))
+               (:file "ur-game" :depends-on ("session"))))
