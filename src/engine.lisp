@@ -180,8 +180,7 @@
 (defun active-player (game)
   (game-player game (turn game)))
 
-(defun opponent-player (game)
-  "Retun the player waiting for their turn."
+(defun inactive-player (game)
   (game-player game (opponent-color (turn game))))
 
 (defun game-phase (game)
@@ -200,30 +199,41 @@
   (setf (nth-tile index (start-path (active-player game)) (turn game))
         new-value))
 
-(defun valid-move (game index)
-  "Return two values: Whether the move is valid, and the type of move."
+(defun valid-move-p (game index)
+  "Remove two values: whether the move is valid, and either the type of move if
+   valid, or the reason why it isn't valid."
+  (check-type index (integer 0))
+
   (with-slots (last-roll turn) game
     (unless (eq :move-phase (game-phase game))
-      (return-from valid-move (values nil :not-rolled-yet)))
+      (return-from valid-move-p (values nil :not-rolled-yet)))
 
     (let ((dest-index (+ index last-roll)))
       (cond
-        ((< index 0) (values nil :bad-tile))
-        ((and (zerop index) (zerop (spare-pieces (active-player game)))) (values nil :no-spare-pieces))
-        ((> dest-index (1+ +path-length+)) (values nil :too-far))
-        ((and (> index 0) (not (eq (active-player-tile game index) turn))) (values nil :unowned-tile))
-        ((= dest-index (1+ +path-length+)) (values t :completed-piece))
-        ((eq (active-player-tile game dest-index) turn) (values nil :cant-capture-own-tile))
-        ((eq (active-player-tile game dest-index) :none) (values t (if (rosettep dest-index)
-                                                                :landed-on-rosette
-                                                                :moved-piece)))
-        ((rosettep dest-index) (values nil :protected-tile))
+        ((and (zerop index)
+              (zerop (spare-pieces (active-player game))))
+         (values nil :no-spare-pieces))
+        ((>= dest-index +path-length+)
+         (values nil :too-far))
+        ((and (> index 0)
+              (not (eq turn (active-player-tile game index))))
+         (values nil :unowned-tile))
+        ((= dest-index (1+ +path-length+))
+         (values t :completed-piece))
+        ((eq turn (active-player-tile game dest-index))
+         (values nil :cant-capture-own-tile))
+        ((eq :none (active-player-tile game dest-index))
+         (values t (if (rosettep dest-index)
+                       :landed-on-rosette
+                       :moved-piece)))
+        ((rosettep dest-index)
+         (values nil :protected-tile))
         (t (values t :captured-piece))))))
 
 (defun valid-turn-p (game)
   "Return whether the current player can make a valid move"
-  (loop for index :from 0 :to +path-length+
-     :when (valid-move game index) :do (return t)))
+  (loop :for index :upto +path-length+
+        :thereis (valid-move-p game index)))
 
 (defun player-tiles (game color)
   (route-tiles  (start-path (game-player game color))
@@ -242,11 +252,6 @@
             (is-player-empty :black))
        :black))))
 
-(defun next-turn (game)
-  (with-slots (last-roll turn) game
-    (setf turn (opponent-color (turn game)))
-    (setf last-roll nil)))
-
 (defun offer-draw (game color)
   "Mark the player as having offered a draw, and return whether both players agree."
   (let ((player (game-player game color)))
@@ -257,35 +262,45 @@
   (setf (draw-offered (game-player game :white)) nil
         (draw-offered (game-player game :black)) nil))
 
-(defun random-roll (&optional (random-state *random-state*))
-  (let ((flips (loop :repeat 4
-                  :collect (random 2 random-state))))
-    (values (reduce #'+ flips) flips)))
+(defun reset-roll (game)
+  (setf (last-roll game) nil))
+
+(defun next-phase (game game-phase &optional change-turn-p)
+  "Move to a different phase."
+  (with-slots (last-roll turn) game
+    (clear-draws game)
+    (ecase game-phase
+      (:roll-phase (reset-roll game))
+      (:move-phase))
+    (when change-turn-p
+      (setf turn (opponent-color (turn game))))))
+
+(defun random-roll (random-state)
+  "Return a list of four coins flipped"
+  (loop :repeat 4
+        :collect (random 2 random-state)))
 
 (defun roll (game)
   "Toss four coins and sum the total, providing a similar D4 allegedly played
-   in the original game. Return 4 values: Whether the move was made, the total
-   flips up, the individual flips, whether it caused the turn to skip, and (if
-                                                                             applicable)
-   the reason why the move failed."
+   in the original game. Return 4 values: Whether the roll was made, the total
+   flips up, the individual flips, whether it caused the turn to skip, and
+   (if applicable) the reason why the move failed."
   (with-slots (random-state last-roll) game
     ;; TODO use conditions to go for failure instead. Or maybe a Result monad.
     ;; It makes better sense here.
     (if (not (eq :roll-phase (game-phase game)))
         (values nil nil nil nil :already-rolled)
-        (multiple-value-bind (total flips) (random-roll random-state)
-          (setf last-roll total)
-          (clear-draws game)
-          (let ((bad-roll (cond ((= total 0) :flipped-nothing)
-                                  ((not (valid-turn-p game)) :no-valid-moves))))
-            (when bad-roll (next-turn game))
-            (values t total flips bad-roll))))))
-
-(defun reset-roll (game)
-  (setf (last-roll game) nil))
+        (let* ((flips (random-roll random-state))
+               (total (setf last-roll (reduce #'+ flips)))
+               (bad-roll-type (cond ((= total 0) :flipped-nothing)
+                                    ((not (valid-turn-p game)) :no-valid-moves))))
+          (if bad-roll-type
+              (next-phase game :roll-phase t)
+              (next-phase game :move-phase nil))
+          (values t total flips bad-roll-type)))))
 
 (defun move-piece (game index)
-  "Move a piece from tile INDEX to the last roll. Return the destination tile's index."
+  "Move a piece from tile INDEX to the last roll."
   (with-slots (last-roll turn) game
     (let ((dest-index (+ index last-roll)))
       (if (= index 0)
@@ -294,22 +309,19 @@
 
       (when (<= dest-index +path-length+)
         (when (eq (active-player-tile game dest-index) (opponent-color (turn game)))
-          (incf (spare-pieces (opponent-player game))))
+          (incf (spare-pieces (inactive-player game))))
         (setf (active-player-tile game dest-index) turn))
-      dest-index)))
+      (values))))
 
 (defun make-move (game position)
   "Attempt to move a piece from the given position. Return 3 values: whether
    it's successful, that type of move that was (or would have been) made, and
    whether the turn ended."
   (check-type position integer)
-  (multiple-value-bind (successful move-type) (valid-move game position)
+  (multiple-value-bind (successful move-type) (valid-move-p game position)
     (if (not successful)
         (values nil move-type)
         (progn
           (move-piece game position)
-          (clear-draws game)
-          (if (eq move-type :landed-on-rosette)
-              (reset-roll game)
-              (next-turn game))
+          (next-phase game :roll-phase (not (eq move-type :landed-on-rosette)))
           (values t move-type (not (eq move-type :landed-on-rosette)))))))
