@@ -14,13 +14,14 @@ tasks:
 - install-roswell: |
     wget -Oroswell.tar.bz2 https://github.com/roswell/roswell/releases/download/v21.06.14.110/roswell-$roswell_release-linux-x86_64.tar.bz2
     tar -xf roswell.tar.bz2
-    $HOME/roswell/ros install sbcl-bin
-    $HOME/roswell/ros use sbcl-bin
+    ~/roswell/ros install sbcl-bin
+    ~/roswell/ros use sbcl-bin
 - build: |
-    mkdir -p $HOME/.roswell/local-projects/build
-    ln -s ur-game $HOME/.roswell/local-projects/build/
+    mkdir -p ~/.roswell/local-projects/build
+    ln -s ~/ur-game ~/.roswell/local-projects/build/
 
-    $HOME/roswell/ros build ur-game/roswell/ur-game.ros
+    ~/roswell/ros -e '(ql:quickload :ur-game)' # fetch deps and compile lisps
+    ~/roswell/ros build ur-game/roswell/ur-game.ros # compile project into executable
 - deploy: |
     sshopts="ssh -o StrictHostKeyChecking=no -p 2220"
     rsyncopts="--recursive --partial --progress --delete"
